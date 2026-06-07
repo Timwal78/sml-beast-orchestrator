@@ -15,6 +15,8 @@ Commands:
   metrics-stats                       — dump aggregate conversion stats
   domain <name>                       — inspect a single domain's lifecycle entry
   recent [N]                          — last N state changes (default 20)
+  replies                             — dump operator review queue (ACCEPT/MANUAL_REVIEW)
+  poll                                — one-shot IMAP poll; classify + persist
   dry-run                             — run one full cycle with NO XRPL / NO SMTP
 
 Every mutating command prints a confirmation line before exiting.
@@ -208,6 +210,28 @@ def cmd_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_replies(args: argparse.Namespace) -> int:
+    """Dump the operator review queue (ACCEPT + MANUAL_REVIEW + OPTOUT)."""
+    from .reply_monitor import load_operator_queue
+
+    records = load_operator_queue()
+    print(json.dumps(records, indent=2))
+    return 0
+
+
+def cmd_poll(args: argparse.Namespace) -> int:
+    """One-shot IMAP poll — drain UNSEEN, classify, persist. No mail sent."""
+    from .reply_monitor import ReplyMonitorError, poll_inbox
+
+    try:
+        result = poll_inbox()
+    except ReplyMonitorError as e:
+        _err(f"reply monitor halted: {e}")
+        return 2
+    print(json.dumps(result.to_dict(), indent=2))
+    return 0
+
+
 def cmd_dry_run(args: argparse.Namespace) -> int:
     """Run one full cycle with XRPL + SMTP disabled. Useful for testing
     targeting + enrichment + template rendering without touching live systems."""
@@ -268,6 +292,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("recent", help="last N state changes")
     s.add_argument("n", nargs="?", type=int, default=20, help="number of events (default 20)")
     s.set_defaults(fn=cmd_recent)
+
+    s = sub.add_parser("replies", help="dump operator review queue (replies awaiting review)")
+    s.set_defaults(fn=cmd_replies)
+
+    s = sub.add_parser("poll", help="one-shot IMAP poll — drain UNSEEN, classify, persist")
+    s.set_defaults(fn=cmd_poll)
 
     s = sub.add_parser(
         "dry-run",

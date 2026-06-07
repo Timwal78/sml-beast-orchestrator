@@ -28,6 +28,18 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (reply monitor phase)
+- `outreach/reply_monitor.py` — IMAP poller; drains UNSEEN, classifies via
+  dispatcher.parse_reply, routes OPTOUT → state.mark_opted_out (only mutation),
+  ACCEPT/MANUAL_REVIEW → operator queue (append-only JSONL); thread map
+  persists Message-ID → domain after each successful dispatch
+- `agent.py` records dispatched Message-ID → domain in the thread map after
+  each successful pitch (step 8 in the dispatch sequence)
+- `opctl replies` — dump operator review queue
+- `opctl poll` — one-shot IMAP poll
+- `.github/workflows/bb7_reply_poll.yml` — cron polls inbox every 30min during
+  business hours (UTC); runs `opctl poll`
+
 ### Added (opctl phase)
 - `outreach/opctl.py` — operator control CLI; subcommands for `status`,
   `opt-out`, `review-clear`, `review-clear-all`, `kill on/off`, `metrics`,

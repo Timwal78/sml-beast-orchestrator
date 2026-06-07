@@ -242,7 +242,11 @@ def _dispatch_one(
         logger.error("SMTP failed for %s: %s", domain, e)
         return False
 
-    # Step 8: State transition
+    # Step 8: Record Message-ID → domain for the reply monitor's thread map
+    from .reply_monitor import record_dispatch
+    record_dispatch(dispatch_result.message_id, domain)
+
+    # Step 9: State transition
     sm.record_pitch_delivered(domain)
     logger.info(
         "PITCH DELIVERED: domain=%s vertical=%s tx=%s msg_id=%s",
