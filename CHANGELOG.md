@@ -28,6 +28,13 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (opctl phase)
+- `outreach/opctl.py` — operator control CLI; subcommands for `status`,
+  `opt-out`, `review-clear`, `review-clear-all`, `kill on/off`, `metrics`,
+  `metrics-stats`, `domain`, `recent`, `dry-run`. None mutate live systems
+  (no XRPL submit, no SMTP send); dry-run runs the full pipeline with both
+  disabled.
+
 ### Added (preflight phase)
 - `outreach/preflight.py` — preflight validator; refuses to enable cycle until
   env vars / XRPL wallet / SMTP auth / DNS / output dir / kill switch /

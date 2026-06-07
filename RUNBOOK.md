@@ -4,7 +4,30 @@ Deployment, configuration, and incident response procedures.
 
 ---
 
-## 0. Preflight check (run before EVERY environment change)
+## 0. Day-to-day operator commands
+
+Use `opctl` for routine operator tasks instead of dropping into a Python REPL:
+
+```bash
+python -m sml_beast.outreach.opctl status              # full snapshot
+python -m sml_beast.outreach.opctl opt-out example.com # permanent blocklist
+python -m sml_beast.outreach.opctl review-clear mastersheets       # +1 review
+python -m sml_beast.outreach.opctl review-clear-all xrpl_x402      # clear gate
+python -m sml_beast.outreach.opctl kill on             # halt all dispatch
+python -m sml_beast.outreach.opctl kill off            # resume dispatch
+python -m sml_beast.outreach.opctl metrics             # raw verification log
+python -m sml_beast.outreach.opctl metrics-stats       # aggregate conversion
+python -m sml_beast.outreach.opctl domain example.com  # single-domain entry
+python -m sml_beast.outreach.opctl recent 10           # last 10 state changes
+python -m sml_beast.outreach.opctl dry-run             # full cycle, no I/O
+```
+
+None of these commands send a pitch, submit XRPL, or send SMTP. They are
+safe to run at any time. `dry-run` runs the full agent pipeline with both
+XRPL and SMTP disabled — useful for verifying targeting + enrichment + the
+template rendering pipeline before the live cycle fires.
+
+## 1. Preflight check (run before EVERY environment change)
 
 ```bash
 python -m sml_beast.outreach.preflight
@@ -26,7 +49,7 @@ DNS change, and as the first step before promoting the agent to mainnet.
 
 ---
 
-## 1. Initial deployment (Render)
+## 2. Initial deployment (Render)
 
 ### 1.1 Repository setup
 
@@ -86,7 +109,7 @@ Without these, pitches will land in spam and the campaign delivers zero value.
 
 ---
 
-## 2. XRPL wallet setup
+## 3. XRPL wallet setup
 
 ### 2.1 Testnet (default)
 
@@ -120,7 +143,7 @@ To transition:
 
 ---
 
-## 3. Kill switch
+## 4. Kill switch
 
 To halt all new outreach immediately without a deploy:
 
@@ -143,7 +166,7 @@ rm output/OUTREACH_KILL_SWITCH
 
 ---
 
-## 4. Manual review gate
+## 5. Manual review gate
 
 The first `OUTREACH_MANUAL_REVIEW_N` (default: 5) pitches per vertical require
 operator approval before dispatch is allowed.
@@ -168,7 +191,7 @@ to verify targeting before clearing the gate.
 
 ---
 
-## 5. Dashboard access
+## 6. Dashboard access
 
 ```
 https://<your-render-url>/dashboard?token=<DASHBOARD_AUTH_TOKEN>
@@ -189,7 +212,7 @@ counts and your own domain's lifecycle states.
 
 ---
 
-## 6. Opt-out handling
+## 7. Opt-out handling
 
 When a recipient replies with `STOP`, the reply parser classifies it as `OPTOUT`.
 The operator must manually call:
@@ -207,7 +230,7 @@ must list opted-out domains. Update it manually when you call `mark_opted_out`.
 
 ---
 
-## 7. State file recovery
+## 8. State file recovery
 
 State lives at `output/_internal/outreach_state.json`. It is written atomically
 via temp-file-and-rename. If it becomes corrupt (truncated write during a crash),
@@ -232,7 +255,7 @@ for r in load_metrics():
 
 ---
 
-## 8. SMTP credentials rotation
+## 9. SMTP credentials rotation
 
 1. Provision new credentials on your relay
 2. Test send via:
@@ -251,7 +274,7 @@ for r in load_metrics():
 
 ---
 
-## 9. Cron / scheduling
+## 10. Cron / scheduling
 
 The agent is invoked as a cron job. On Render, use a Render Cron Job service
 pointed at the same repo, or trigger via GitHub Actions:
@@ -284,7 +307,7 @@ jobs:
 
 ---
 
-## 10. Escalation checklist
+## 11. Escalation checklist
 
 | Symptom | Action |
 |---------|--------|
