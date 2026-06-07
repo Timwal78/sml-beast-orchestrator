@@ -28,17 +28,27 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (continued this phase)
+- `outreach/enricher.py` — contact discovery; security.txt → humans.txt →
+  contact.txt → humans.json → author pages → sponsorship pages; 30-day TTL
+  cache; role-account rejection; atomic POSIX writes
+- `outreach/templates.py` — vertical-keyed pitch templates; required-field
+  enforcement (TemplateMissingVariableError on any unfilled slot); attack-angle
+  → observation mapping for mastersheets + xrpl_x402
+- `outreach/dispatcher.py` — SMTP send via outreach@infrastructure.scriptmasterlabs.com;
+  CAN-SPAM footer; strict reply parser (OPTOUT / ACCEPT / MANUAL_REVIEW);
+  no LLM in acceptance path; injectable smtp_factory for test isolation
+- `outreach/verifier.py` — observation-only link presence checker; FOUND /
+  NOT_FOUND / SUSPICIOUS / ERROR classifications; wildcard-DNS guard;
+  append-only JSONL log; conversion_stats() for dashboard
+- `outreach/agent.py` — composition entrypoint; cron-friendly run_cycle();
+  dry-run mode (BB7_OUTREACH_DRY_RUN=1); kill switch propagation
+- Dashboard `[OUTREACH]` panel — domain counts by state, daily ceiling status,
+  kill switch indicator, conversion/dofollow rates, 20-event timeline;
+  state color-coded (cyan=PROPOSED, amber=DEMO_SENT, green=verified, magenta=opted-out)
+
 ### Pending (next commits)
-- `outreach/state.py` — per-domain cooldown, manual review counter,
-  warmup auto-detect, restart-safe persistence
-- `outreach/xrpl_client.py` — `send_payment(dst, amt) -> tx_hash` only
-- `outreach/enricher.py` — security.txt / humans.txt source priority
-- `outreach/templates.py` — vertical-keyed pitch templates
-- `outreach/dispatcher.py` — SMTP send with SPF/DKIM/DMARC alignment
-- `outreach/verifier.py` — observation-only link presence checker
-- `outreach/agent.py` — composition entrypoint
-- Dashboard outreach panel (BB6 extension)
-- `RUNBOOK.md` — operator deployment + rotation procedures
+- `RUNBOOK.md` — operator deployment + key rotation procedures
 
 ## [0.2.0] — 2026-06-07 (BB1–BB6 shipped)
 

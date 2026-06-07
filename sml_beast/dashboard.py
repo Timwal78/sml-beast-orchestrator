@@ -188,6 +188,50 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
         v = _safe_vertical(vertical)
         return jsonify({"vertical": v, "pages": _list_pages(output_root, v)})
 
+    @app.route("/api/dashboard/outreach", methods=["GET"])
+    @require_api_auth
+    def outreach():
+        from pathlib import Path as _Path
+
+        from .outreach.guardrails import OutreachGuardrails, kill_switch_path
+        from .outreach.state import OutreachStateMachine
+        from .outreach.verifier import conversion_stats
+
+        sm = OutreachStateMachine()
+        snap = sm.snapshot()
+        counts = sm.domain_count_by_state()
+        ledger = OutreachGuardrails.daily_ledger_snapshot()
+        stats = conversion_stats(_Path(output_root))
+        kill_active = kill_switch_path().exists()
+
+        recent_events = []
+        for domain, entry in sorted(
+            snap["domains"].items(),
+            key=lambda kv: kv[1].get("last_state_change_ts_utc", 0),
+            reverse=True,
+        )[:20]:
+            recent_events.append(
+                {
+                    "domain": domain,
+                    "state": entry.get("state"),
+                    "vertical": entry.get("vertical"),
+                    "ts": entry.get("last_state_change_ts_utc", 0),
+                    "tx_hash": entry.get("tx_hash"),
+                }
+            )
+
+        return jsonify(
+            {
+                "counts": counts,
+                "ledger": ledger,
+                "conversion": stats,
+                "kill_switch_active": kill_active,
+                "recent_events": recent_events,
+                "warmup": sm.is_in_warmup_period(),
+                "days_since_first_pitch": sm.days_since_first_pitch(),
+            }
+        )
+
     @app.route("/dashboard", methods=["GET"])
     @require_html_auth
     def dashboard():
@@ -340,6 +384,10 @@ _DASHBOARD_HTML = r"""<!doctype html>
   .wallet-line { font-size: 11px; padding: 3px 0; color: var(--text); }
   .wallet-line .wlt { color: var(--neon-magenta); }
   .wallet-line .meta { color: var(--text-dim); }
+  td.cyan    { color: var(--neon-cyan);    text-shadow: 0 0 3px rgba(0,255,255,0.4); }
+  td.amber   { color: var(--neon-amber);   text-shadow: 0 0 3px rgba(255,176,0,0.4); }
+  td.green   { color: var(--neon-green);   text-shadow: 0 0 3px rgba(0,255,102,0.4); }
+  td.magenta { color: var(--neon-magenta); text-shadow: 0 0 3px rgba(255,0,255,0.4); }
 </style>
 </head>
 <body>
@@ -393,6 +441,27 @@ _DASHBOARD_HTML = r"""<!doctype html>
       <tbody><tr><td colspan="5" class="empty">awaiting harvest...</td></tr></tbody>
     </table>
   </div>
+</div>
+
+<div class="panel magenta" id="panel-outreach">
+  <h2>[OUTREACH] // M2M PLACEMENT</h2>
+  <div class="stat-grid">
+    <div class="stat"><div class="label">pitches sent (24h)</div><div class="value" id="or-pitches-24h">--</div></div>
+    <div class="stat"><div class="label">daily ceiling</div><div class="value" id="or-ceiling">--</div></div>
+    <div class="stat"><div class="label">kill switch</div><div class="value" id="or-killswitch">--</div></div>
+    <div class="stat"><div class="label">warmup mode</div><div class="value" id="or-warmup">--</div></div>
+    <div class="stat"><div class="label">proposed</div><div class="value" id="or-proposed">--</div></div>
+    <div class="stat"><div class="label">demo sent</div><div class="value" id="or-demo">--</div></div>
+    <div class="stat"><div class="label">pitch delivered</div><div class="value" id="or-delivered">--</div></div>
+    <div class="stat"><div class="label">link observed</div><div class="value" id="or-observed">--</div></div>
+    <div class="stat"><div class="label">opted out</div><div class="value" id="or-opted">--</div></div>
+    <div class="stat"><div class="label">conversion rate</div><div class="value" id="or-conv">--</div></div>
+    <div class="stat"><div class="label">dofollow rate</div><div class="value" id="or-dofollow">--</div></div>
+  </div>
+  <table id="tbl-outreach" style="margin-top:12px">
+    <thead><tr><th>domain</th><th>state</th><th>vertical</th><th class="num">last change</th></tr></thead>
+    <tbody><tr><td colspan="4" class="empty">no outreach activity yet</td></tr></tbody>
+  </table>
 </div>
 
 <footer>
@@ -491,6 +560,50 @@ async function pull() {
     } catch (e) {
       console.error(`bounty pull ${v} failed`, e);
     }
+  }
+
+  // [OUTREACH] panel
+  try {
+    const or = await fetch("/api/dashboard/outreach", {
+      cache: "no-store", headers: authHeaders() });
+    if (or.status !== 401) {
+      const o = await or.json();
+      const c = o.counts || {};
+      const l = o.ledger || {};
+      const cv = o.conversion || {};
+      document.getElementById("or-proposed").textContent    = c["PROPOSED"]  || 0;
+      document.getElementById("or-demo").textContent        = c["DEMO_SENT"] || 0;
+      document.getElementById("or-delivered").textContent   = c["PITCH_DELIVERED"] || 0;
+      document.getElementById("or-observed").textContent    = c["LINK_OBSERVED"] || 0;
+      document.getElementById("or-opted").textContent       = c["OPTED_OUT"] || 0;
+      document.getElementById("or-killswitch").textContent  = o.kill_switch_active ? "ACTIVE" : "inactive";
+      document.getElementById("or-warmup").textContent      = o.warmup ? "yes" : "no";
+      const used   = (l.total_usdc_today || 0).toFixed(2);
+      const ceil   = (l.ceiling_usdc || 20).toFixed(2);
+      document.getElementById("or-ceiling").textContent     = used + " / " + ceil + " USDC";
+      document.getElementById("or-pitches-24h").textContent = (l.pitches_today || 0) + " / " + (l.pitch_cap || "?");
+      const conv  = cv.conversion_rate != null ? (cv.conversion_rate * 100).toFixed(1) + "%" : "--";
+      const dofo  = cv.dofollow_rate   != null ? (cv.dofollow_rate   * 100).toFixed(1) + "%" : "--";
+      document.getElementById("or-conv").textContent    = conv;
+      document.getElementById("or-dofollow").textContent = dofo;
+      const tbody = document.querySelector("#tbl-outreach tbody");
+      if (!o.recent_events || !o.recent_events.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">no outreach activity yet</td></tr>';
+      } else {
+        const stateClass = { "PROPOSED":"cyan","DEMO_SENT":"amber","PITCH_DELIVERED":"green","LINK_OBSERVED":"green","OPTED_OUT":"magenta" };
+        tbody.innerHTML = o.recent_events.map(ev => {
+          const sc = stateClass[ev.state] || "";
+          return `<tr>
+            <td class="domain">${ev.domain}</td>
+            <td class="${sc}">${ev.state || "--"}</td>
+            <td>${ev.vertical || "--"}</td>
+            <td class="num">${ago(ev.ts)}</td>
+          </tr>`;
+        }).join("");
+      }
+    }
+  } catch (e) {
+    console.error("outreach pull failed", e);
   }
 
   document.getElementById("last-pull").textContent = new Date().toLocaleTimeString();
