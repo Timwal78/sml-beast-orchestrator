@@ -193,14 +193,28 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
     def outreach():
         from pathlib import Path as _Path
 
-        from .outreach.guardrails import OutreachGuardrails, kill_switch_path
+        from .outreach.guardrails import (
+            OUTREACH_DAILY_CEILING_USDC,
+            OUTREACH_DAILY_PITCH_CAP_STEADY,
+            OUTREACH_DAILY_PITCH_CAP_WARMUP,
+            OutreachGuardrails,
+            kill_switch_path,
+        )
         from .outreach.state import OutreachStateMachine
         from .outreach.verifier import conversion_stats
 
         sm = OutreachStateMachine()
         snap = sm.snapshot()
         counts = sm.domain_count_by_state()
-        ledger = OutreachGuardrails.daily_ledger_snapshot()
+        raw_ledger = OutreachGuardrails.daily_ledger_snapshot()
+        is_warmup = sm.is_in_warmup_period()
+        ledger = {
+            "total_usdc_today": raw_ledger.get("spent_usdc", 0.0),
+            "ceiling_usdc": OUTREACH_DAILY_CEILING_USDC,
+            "pitches_today": raw_ledger.get("pitches_sent", 0),
+            "pitch_cap": OUTREACH_DAILY_PITCH_CAP_WARMUP if is_warmup else OUTREACH_DAILY_PITCH_CAP_STEADY,
+            "date": raw_ledger.get("date"),
+        }
         stats = conversion_stats(_Path(output_root))
         kill_active = kill_switch_path().exists()
 
