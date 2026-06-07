@@ -80,6 +80,38 @@ jobs:
       - name: Run test suite
         run: python -m unittest discover -s tests -v
 
+  # ── preflight validator (offline-only checks) ───────────────────────────
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      # Minimal env to make the preflight validator runnable. Real values
+      # are never committed; --skip-network avoids any outbound traffic.
+      BB7_XRPL_WALLET_SEED: sEdSKaCy2JT7JaM7v95H9SxkhP9wS2r
+      BB7_SMTP_HOST: smtp.example.com
+      BB7_SMTP_USER: ci-dummy@example.com
+      BB7_SMTP_PASS: ci-dummy-pass
+      BB7_OPT_OUT_URL: https://www.scriptmasterlabs.com/outreach/opt-out
+      BB7_OPERATOR_ADDRESS: ScriptMasterLabs - see contact page
+      BB7_OPERATOR_SIGNATURE: CI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install runtime + bb7 extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[bb7]"
+      - name: Run preflight (skip network)
+        # Exit code 1 (warnings) is acceptable in CI — the manual review
+        # gate is expected to be ACTIVE since this is a fresh checkout
+        # with no prior state. Only exit code 2 (hard fails) breaks the build.
+        run: |
+          python -m sml_beast.outreach.preflight --skip-network --json
+          ec=$?
+          if [ "$ec" -ge 2 ]; then exit "$ec"; fi
+
   # ── security audit ──────────────────────────────────────────────────────
   audit:
     runs-on: ubuntu-latest

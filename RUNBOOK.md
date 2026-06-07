@@ -4,6 +4,28 @@ Deployment, configuration, and incident response procedures.
 
 ---
 
+## 0. Preflight check (run before EVERY environment change)
+
+```bash
+python -m sml_beast.outreach.preflight
+```
+
+Exit codes:
+- `0` — green; safe to enable the live cycle
+- `1` — yellow; soft warnings (DNS, kill switch, manual review gate); operator decides
+- `2` — red; refuse to enable until resolved
+
+Flags:
+- `--json` — machine-readable output for CI gating
+- `--skip-network` — skip XRPL RPC + SMTP + DNS checks (for offline runs)
+
+The validator never sends a pitch, never submits XRPL, never mutates state.
+It only inspects environment, network connectivity, secret material parsing,
+and state machine readiness. Use this after every credential rotation, every
+DNS change, and as the first step before promoting the agent to mainnet.
+
+---
+
 ## 1. Initial deployment (Render)
 
 ### 1.1 Repository setup

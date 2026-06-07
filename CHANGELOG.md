@@ -28,6 +28,14 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (preflight phase)
+- `outreach/preflight.py` — preflight validator; refuses to enable cycle until
+  env vars / XRPL wallet / SMTP auth / DNS / output dir / kill switch /
+  manual review state all check out. Exit codes: 0=green, 1=warn, 2=fail.
+  Never sends a pitch, never submits XRPL, never mutates state.
+- CI `preflight` job — runs offline preflight on every PR; blocks merge only
+  on hard FAILs (warnings are expected on fresh checkouts)
+
 ### Added (continued this phase)
 - `outreach/enricher.py` — contact discovery; security.txt → humans.txt →
   contact.txt → humans.json → author pages → sponsorship pages; 30-day TTL
