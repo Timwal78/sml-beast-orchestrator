@@ -178,10 +178,26 @@ def _dispatch_one(
         settlement_ms = 0
         logger.info("[DRY RUN] skipping XRPL payment for %s", domain)
     else:
+        # The demo payment goes to a designated XRPL address, not the
+        # recipient's email. Recipients are domain owners who likely have
+        # no XRPL wallet. The tx hash proves SML's X402 payment capability
+        # in the pitch email — fire-and-forget, no custody.
+        demo_dest = os.environ.get("BB7_XRPL_DEMO_DESTINATION", "").strip()
+        if not demo_dest:
+            network = os.environ.get("BB7_XRPL_NETWORK", "testnet")
+            if network != "testnet":
+                logger.error(
+                    "BB7_XRPL_DEMO_DESTINATION required on mainnet — "
+                    "set to your demo pool wallet address. Skipping %s",
+                    domain,
+                )
+                return False
+            # Testnet: well-known funded genesis account — safe demo target
+            demo_dest = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
         t0 = time.monotonic()
         try:
             tx_hash, _xrp_sent = xrpl_client.send_demo_payment_for_usdc(
-                recipient_email,
+                demo_dest,
                 OUTREACH_STANDARD_FEE_USDC,
                 memo=f"bb7-demo-{domain}",
             )
