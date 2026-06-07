@@ -36,18 +36,10 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[bb7]"
 
-      - name: Run outreach cycle
+      - name: Trigger Webhook
         env:
-          BEAST_OUTPUT_ROOT: ${{ secrets.BEAST_OUTPUT_ROOT }}
-          BB7_XRPL_WALLET_SEED: ${{ secrets.BB7_XRPL_WALLET_SEED }}
-          BB7_XRPL_NETWORK: ${{ secrets.BB7_XRPL_NETWORK }}
-          BB7_XRP_PRICE_USDC: ${{ secrets.BB7_XRP_PRICE_USDC }}
-          BB7_SMTP_HOST: ${{ secrets.BB7_SMTP_HOST }}
-          BB7_SMTP_USER: ${{ secrets.BB7_SMTP_USER }}
-          BB7_SMTP_PASS: ${{ secrets.BB7_SMTP_PASS }}
-          BB7_SMTP_FROM: ${{ secrets.BB7_SMTP_FROM }}
-          BB7_OPT_OUT_URL: ${{ secrets.BB7_OPT_OUT_URL }}
-          BB7_OPERATOR_ADDRESS: ${{ secrets.BB7_OPERATOR_ADDRESS }}
-          BB7_OPERATOR_SIGNATURE: ${{ secrets.BB7_OPERATOR_SIGNATURE }}
-          BB7_OUTREACH_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-        run: python -m sml_beast.outreach.agent
+          DASHBOARD_AUTH_TOKEN: ${{ secrets.DASHBOARD_AUTH_TOKEN }}
+        run: |
+          curl -X POST https://sml-beast-orchestrator.onrender.com/api/run-cycle \
+            -H "Authorization: Bearer $DASHBOARD_AUTH_TOKEN" \
+            --fail-with-body

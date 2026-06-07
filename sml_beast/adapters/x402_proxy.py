@@ -53,6 +53,8 @@ USDC = {
 
 _ledger_lock = Lock()
 _ledger: dict[str, dict] = {}  # agent_wallet -> {paid_usdc, calls, last_ts}
+_cycle_lock = Lock()
+_cycle_running = False
 
 
 def _atomic(price: str) -> str:
@@ -201,6 +203,37 @@ def create_app(output_root: str | None = None) -> Flask:
             entry["last_ts"] = time.time()
 
         return jsonify({"x402Version": X402_VERSION, "wallet": wallet, "result": data})
+
+    @app.route("/api/run-cycle", methods=["POST"])
+    def run_cycle():
+        auth_token = os.environ.get("DASHBOARD_AUTH_TOKEN")
+        if not auth_token:
+            return jsonify({"error": "DASHBOARD_AUTH_TOKEN not configured"}), 503
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer ") or auth_header.split(" ")[1] != auth_token:
+            return jsonify({"error": "unauthorized"}), 401
+
+        global _cycle_running
+        with _cycle_lock:
+            if _cycle_running:
+                return jsonify({"status": "already running"}), 409
+            _cycle_running = True
+
+        def _run():
+            global _cycle_running
+            try:
+                from sml_beast.outreach.agent import main as run_agent
+                run_agent()
+            except Exception as e:
+                app.logger.error("Cycle failed: %s", e)
+            finally:
+                with _cycle_lock:
+                    _cycle_running = False
+
+        import threading
+        threading.Thread(target=_run, daemon=True).start()
+        return jsonify({"status": "accepted"}), 202
 
     return app
 
