@@ -40,6 +40,83 @@ FORUM_HOSTS = frozenset({"reddit.com", "quora.com", "stackexchange.com", "stacko
 LISTICLE_RX = re.compile(r"\b(\d+\s+best|top\s+\d+|\d+\s+alternatives?)\b", re.I)
 
 
+# Vertical-keyed attack-angle rules. Each tuple is (compiled_pattern, code, copy).
+# Patterns match against the lowercase concatenation of title + snippet for each
+# top-10 organic result; a hit on any result increments that angle's trigger_count.
+ATTACK_RULES: dict[str, list[tuple[re.Pattern, str, str]]] = {
+    "mastersheets": [
+        (re.compile(r"\b(subscription|per\s+month|monthly\s+(plan|fee|cost)|annual\s+(plan|fee|cost)|pricing\s+plan|\$\d+\s*/\s*(?:mo|month))\b", re.I),
+         "exploit_subscription_fatigue",
+         "Attack subscription pricing — MasterSheets is a one-time payment, lifetime access."),
+        (re.compile(r"\b(cloud[-\s]?only|requires\s+(?:sync|account|sign[-\s]?up)|sharing\s+required|online\s+only|google\s+account\s+required)\b", re.I),
+         "exploit_cloud_lockin",
+         "Attack cloud lock-in — MasterSheets is local-first, zero telemetry, data stays on your machine."),
+        (re.compile(r"\b(openai\s+integration|chatgpt\s+plugin|premium\s+ai|ai\s+subscription|gemini\s+integration|copilot\s+pro|ai\s+add[-\s]?on)\b", re.I),
+         "exploit_ai_lockin",
+         "Attack AI vendor lock-in — MasterSheets is BYOK, point it at any model you already pay for."),
+    ],
+    "xrpl_x402": [
+        (re.compile(r"\b(api\s+key|bearer\s+token|rate\s+limit|quota|throttl|sign[-\s]?up\s+required|developer\s+account)\b", re.I),
+         "exploit_api_friction",
+         "Attack API-key onboarding — x402 is dynamic; agents pay per call with zero static credentials."),
+        (re.compile(r"\b(slow\s+settlement|takes?\s+\d+\s+(minutes|hours)|confirmation\s+time|block\s+confirmation|settlement\s+delay)\b", re.I),
+         "exploit_latency",
+         "Attack settlement latency — IRL clears in sub-50ms on XRPL and Xahau."),
+        (re.compile(r"\b(corporate\s+account|credit\s+line|kyc\s+required|business\s+account|merchant\s+approval|underwriting)\b", re.I),
+         "exploit_onboarding",
+         "Attack onboarding friction — no credit line, no KYC, no merchant underwriting. Just pay."),
+        (re.compile(r"\b(stripe|paypal|braintree|square|traditional\s+payment|legacy\s+rails)\b", re.I),
+         "position_vs_legacy_rails",
+         "Position against legacy payment rails — x402 is the M2M-native upgrade path."),
+    ],
+}
+
+
+def _extract_attack_angles(organic: list, vertical: str | None) -> list[dict]:
+    """Walk top-10 organic results; for each ATTACK_RULES entry count how many
+    results' (title+snippet) blob triggers the pattern. Return non-zero hits as
+    a prioritized list. Always returns at least one entry — falls back to the
+    structural-superiority angle so the generator never renders an empty CTA."""
+    if not vertical or vertical not in ATTACK_RULES:
+        return [{"code": "direct_structural_superiority",
+                 "copy": "Direct structural superiority — outclass incumbents on the canonical product brief.",
+                 "trigger_count": 0}]
+
+    rules = ATTACK_RULES[vertical]
+    counts = {code: 0 for _, code, _ in rules}
+    copies = {code: copy for _, code, copy in rules}
+
+    for r in organic[:10]:
+        blob = f"{r.get('title', '')} {r.get('snippet', '')}"
+        for pattern, code, _ in rules:
+            if pattern.search(blob):
+                counts[code] += 1
+
+    # Privacy-gap heuristic for MasterSheets: trigger if NONE of the top-3
+    # mention privacy/local/sovereign in title+snippet. Absence of the concept
+    # is itself an opportunity to own the narrative.
+    if vertical == "mastersheets":
+        top3_blob = " ".join(f"{r.get('title','')} {r.get('snippet','')}" for r in organic[:3]).lower()
+        if not any(t in top3_blob for t in ("privacy", "private", "local", "sovereign", "self-host", "offline")):
+            counts["exploit_privacy_gap"] = 1
+            copies["exploit_privacy_gap"] = (
+                "Top results don't mention data sovereignty — own that narrative.")
+
+    angles = [
+        {"code": code, "copy": copies[code], "trigger_count": n}
+        for code, n in counts.items() if n > 0
+    ]
+    angles.sort(key=lambda a: -a["trigger_count"])
+
+    if not angles:
+        angles.append({
+            "code": "direct_structural_superiority",
+            "copy": "Direct structural superiority — outclass incumbents on the canonical product brief.",
+            "trigger_count": 0,
+        })
+    return angles
+
+
 def _host(url: str) -> str:
     try:
         h = urlparse(url).netloc.lower()
@@ -82,9 +159,10 @@ class GapReport:
     gap_severity:        str   # LOW | MEDIUM | HIGH | CRITICAL
     priority_score:      int   # 0-100
     recommended_intents: list[str]
+    attack_angles:       list[dict]   # [{code, copy, trigger_count}, ...] — vertical-keyed
 
 
-def analyze(serp_data: dict, brand_domains: Iterable[str]) -> GapReport:
+def analyze(serp_data: dict, brand_domains: Iterable[str], vertical: str | None = None) -> GapReport:
     organic = serp_data.get("organic", []) or []
     keyword = serp_data.get("query", "")
     brand_set = {d.lower().lstrip(".") for d in brand_domains}
@@ -156,6 +234,8 @@ def analyze(serp_data: dict, brand_domains: Iterable[str]) -> GapReport:
     if not intents:
         intents = ["informational"]
 
+    attack_angles = _extract_attack_angles(organic, vertical)
+
     return GapReport(
         keyword=keyword,
         brand_present=bool(positions),
@@ -168,25 +248,30 @@ def analyze(serp_data: dict, brand_domains: Iterable[str]) -> GapReport:
         gap_severity=severity,
         priority_score=int(priority),
         recommended_intents=intents,
+        attack_angles=attack_angles,
     )
 
 
-def synthesize_page_brief(canonical_brief: dict, gap: GapReport) -> dict:
+def synthesize_page_brief(canonical_brief: dict, gap: GapReport, vertical: str | None = None) -> dict:
     """Per-page brief: canonical product facts overlaid with gap-driven strategy.
-    The content generator consumes this; it never sees the raw canonical brief at runtime."""
+    The content generator consumes this; it never sees the raw canonical brief at runtime.
+    `vertical` is the worker's stable key ("mastersheets" / "xrpl_x402") — the generator
+    reads it to select vertical-keyed JSON-LD schema types."""
     return {
         **canonical_brief,
+        "_vertical": vertical,
         "_gap": {
-            "keyword":          gap.keyword,
-            "severity":         gap.gap_severity,
-            "priority":         gap.priority_score,
-            "intents":          gap.recommended_intents,
-            "incumbents":       gap.top3_signatures,
+            "keyword":           gap.keyword,
+            "severity":          gap.gap_severity,
+            "priority":          gap.priority_score,
+            "intents":           gap.recommended_intents,
+            "incumbents":        gap.top3_signatures,
             "incumbent_classes": gap.top3_classes,
-            "paa":              list(zip(gap.paa_questions, gap.paa_seeded_answers)),
-            "semantic_cluster": gap.related_clusters,
-            "brand_positions":  gap.brand_positions,
-            "brand_present":    gap.brand_present,
+            "paa":               list(zip(gap.paa_questions, gap.paa_seeded_answers)),
+            "semantic_cluster":  gap.related_clusters,
+            "brand_positions":   gap.brand_positions,
+            "brand_present":     gap.brand_present,
+            "attack_angles":     gap.attack_angles,
         },
     }
 

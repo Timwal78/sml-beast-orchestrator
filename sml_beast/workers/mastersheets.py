@@ -14,6 +14,7 @@ from sml_beast.workers.base      import Worker
 
 class MasterSheetsWorker(Worker):
     name = "mastersheets"
+    vertical = "mastersheets"
     BRIEF = MASTERSHEETS
     SILOS = MASTERSHEETS_SILOS
 

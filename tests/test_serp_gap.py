@@ -99,6 +99,118 @@ class GapEngineTests(unittest.TestCase):
         self.assertTrue(page_brief["_gap"]["paa"])
 
 
+class AttackAngleTests(unittest.TestCase):
+    def test_mastersheets_detects_subscription_fatigue(self):
+        rep = analyze(serp("google sheets alternative", [
+            r("Google Sheets — subscription pricing", "https://workspace.google.com/sheets",
+              "Per month or annual plan"),
+            r("Best paid spreadsheet", "https://capterra.com/x",
+              "Monthly fee starting at $12/mo"),
+            r("Compare plans", "https://example.com/y",
+              "Annual subscription required"),
+        ]), brand_domains=BRAND, vertical="mastersheets")
+        codes = [a["code"] for a in rep.attack_angles]
+        self.assertIn("exploit_subscription_fatigue", codes)
+        # trigger count should reflect multiple hits
+        sub = next(a for a in rep.attack_angles if a["code"] == "exploit_subscription_fatigue")
+        self.assertGreaterEqual(sub["trigger_count"], 2)
+
+    def test_mastersheets_privacy_gap_when_top3_silent(self):
+        rep = analyze(serp("collaborative spreadsheet", [
+            r("Top spreadsheet tools", "https://capterra.com/a", "Real-time editing"),
+            r("Spreadsheet roundup", "https://g2.com/b", "Charts and pivot tables"),
+            r("Best in 2025", "https://example.com/c", "Modern UI and fast"),
+        ]), brand_domains=BRAND, vertical="mastersheets")
+        codes = [a["code"] for a in rep.attack_angles]
+        self.assertIn("exploit_privacy_gap", codes)
+
+    def test_xrpl_x402_detects_api_friction_and_latency(self):
+        rep = analyze(serp("agent payment api", [
+            r("Stripe API for agents", "https://stripe.com/x", "Requires API key and rate limit"),
+            r("Slow settlement on legacy rails", "https://example.com/y", "Takes 3 minutes per confirmation"),
+            r("KYC required", "https://example.com/z", "Corporate account and credit line"),
+        ]), brand_domains=BRAND, vertical="xrpl_x402")
+        codes = [a["code"] for a in rep.attack_angles]
+        self.assertIn("exploit_api_friction", codes)
+        self.assertIn("exploit_latency", codes)
+        self.assertIn("exploit_onboarding", codes)
+        self.assertIn("position_vs_legacy_rails", codes)
+
+    def test_no_vertical_returns_fallback(self):
+        rep = analyze(serp("foo", [r("Bar", "https://example.com")]),
+                      brand_domains=BRAND)
+        self.assertEqual(len(rep.attack_angles), 1)
+        self.assertEqual(rep.attack_angles[0]["code"], "direct_structural_superiority")
+
+    def test_unknown_vertical_returns_fallback(self):
+        rep = analyze(serp("foo", [r("Bar", "https://example.com")]),
+                      brand_domains=BRAND, vertical="nonexistent")
+        self.assertEqual(rep.attack_angles[0]["code"], "direct_structural_superiority")
+
+    def test_attack_angles_sorted_by_trigger_count(self):
+        rep = analyze(serp("alts", [
+            r("Subscription required", "https://x.com", "$5/month"),
+            r("Subscription pricing", "https://y.com", "annual plan"),
+            r("ChatGPT plugin", "https://z.com", "OpenAI integration"),
+        ]), brand_domains=BRAND, vertical="mastersheets")
+        # subscription rule hits twice, ai_lockin rule hits once -> subscription first
+        codes = [a["code"] for a in rep.attack_angles]
+        if "exploit_subscription_fatigue" in codes and "exploit_ai_lockin" in codes:
+            self.assertLess(codes.index("exploit_subscription_fatigue"),
+                            codes.index("exploit_ai_lockin"))
+
+
+class JsonLdFactoryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="beast-jsonld-")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _build(self, vertical: str, brief_dict: dict):
+        from sml_beast.content.generator import write_page
+        rep = analyze(serp("test keyword",
+            [r("Capterra", "https://capterra.com/x"),
+             r("G2", "https://g2.com/y"),
+             r("Reddit", "https://reddit.com/z")],
+            paa=[{"question": "Is it free?", "snippet": "One-time payment."}]),
+            brand_domains=BRAND, vertical=vertical)
+        page_brief = synthesize_page_brief(brief_dict, rep, vertical=vertical)
+        path = write_page(self.tmp, page_brief, "test", "test keyword")
+        with open(os.path.join(path, "schema.jsonld")) as f:
+            import json as _j
+            return _j.load(f)
+
+    def test_mastersheets_emits_softwareapplication(self):
+        from sml_beast.content.briefs import MASTERSHEETS
+        blocks = self._build("mastersheets", MASTERSHEETS)
+        types = [b.get("@type") for b in blocks]
+        self.assertIn("Product", types)
+        self.assertIn("SoftwareApplication", types)
+        self.assertIn("FAQPage", types)
+        sa = next(b for b in blocks if b["@type"] == "SoftwareApplication")
+        self.assertEqual(sa["applicationCategory"], "BusinessApplication")
+        self.assertEqual(sa["applicationSubCategory"], "Spreadsheet")
+        self.assertIn("100% one-time payment — zero subscriptions", sa["featureList"])
+
+    def test_xrpl_emits_organization_and_techarticle(self):
+        from sml_beast.content.briefs import XRPL_X402
+        blocks = self._build("xrpl_x402", XRPL_X402)
+        types = [b.get("@type") for b in blocks]
+        self.assertIn("Product", types)
+        self.assertIn("Organization", types)
+        self.assertIn("TechArticle", types)
+        self.assertIn("FAQPage", types)
+        org = next(b for b in blocks if b["@type"] == "Organization")
+        self.assertEqual(org["name"], "ScriptMasterLabs")
+        self.assertIn("https://www.scriptmasterlabs.com", org["sameAs"])
+        self.assertIn("https://squeezeos-api.onrender.com", org["sameAs"])
+        tech = next(b for b in blocks if b["@type"] == "TechArticle")
+        self.assertEqual(tech["proficiencyLevel"], "Expert")
+        self.assertIn("XRPL", tech["keywords"])
+        self.assertIn("x402", tech["keywords"])
+
+
 class GeneratorIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="beast-test-")
@@ -115,12 +227,13 @@ class GeneratorIntegrationTests(unittest.TestCase):
              r("Reddit thread", "https://reddit.com/z")],
             paa=[{"question": "What is the best alternative?", "snippet": "MasterSheets."}],
             related=["one-time spreadsheet", "self-hosted spreadsheet"]),
-            brand_domains=BRAND)
-        page_brief = synthesize_page_brief(MASTERSHEETS, rep)
+            brand_domains=BRAND, vertical="mastersheets")
+        page_brief = synthesize_page_brief(MASTERSHEETS, rep, vertical="mastersheets")
         out = write_page(self.tmp, page_brief, "alternative", "google sheets alternative")
         self.assertTrue(os.path.isfile(os.path.join(out, "page.mdx")))
         self.assertTrue(os.path.isfile(os.path.join(out, "schema.jsonld")))
-        mdx = open(os.path.join(out, "page.mdx")).read()
+        with open(os.path.join(out, "page.mdx")) as f:
+            mdx = f.read()
         self.assertIn("needs_human_review: true", mdx)
         self.assertIn("priority_score:", mdx)
         self.assertIn("gap_severity:", mdx)

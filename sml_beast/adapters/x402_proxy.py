@@ -12,9 +12,9 @@ to forward `X-PAYMENT` directly and remove this proxy entirely.
 
 Endpoints
 ---------
-POST /x402/search   — gated, returns live SERP from Serper.dev
+POST /api/v1/m2m/serp  — gated, returns live SERP from Serper.dev
 GET  /.well-known/x402 — discovery manifest (Bazaar-compatible)
-GET  /health        — health probe
+GET  /health           — health probe
 """
 
 import base64
@@ -135,14 +135,14 @@ def create_app() -> Flask:
             "facilitator": f"{request.host_url.rstrip('/')}/x402",
             "discoverable": True,
             "resources": [{
-                "path":        "/x402/search",
+                "path":        "/api/v1/m2m/serp",
                 "method":      "POST",
                 "price":       {"amountUSDC": PRICE_USDC, "asset": "USDC", "network": NETWORK},
                 "description": "Live Google SERP — organic, people-also-ask, related.",
             }],
         })
 
-    @app.route("/x402/search", methods=["POST"])
+    @app.route("/api/v1/m2m/serp", methods=["POST"])
     def search():
         reqs = _requirements(request.base_url)
         header = request.headers.get("X-PAYMENT")
@@ -197,5 +197,5 @@ def mint_internal_token(wallet: str = "beast-orchestrator", ttl_s: int = 3600) -
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("X402_PROXY_PORT", "9402"))
+    port = int(os.environ.get("X402_PROXY_PORT", "4020"))
     create_app().run(host="0.0.0.0", port=port)

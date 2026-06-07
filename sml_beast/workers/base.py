@@ -24,8 +24,10 @@ logger = logging.getLogger("sml-beast.worker")
 
 class Worker(ABC):
     name: str = "base"
+    vertical: str = "base"           # stable key used by the gap engine + JSON-LD factory
     BRAND_DOMAINS: tuple[str, ...] = ("scriptmasterlabs.com",)
-    MIN_PRIORITY: int = 25   # skip keywords whose gap doesn't clear this bar
+    MIN_PRIORITY: int = 25           # skip keywords whose gap doesn't clear this bar
+    PROXY_PATH: str = "/api/v1/m2m/serp"
 
     def __init__(self,
                  brief: dict,
@@ -42,7 +44,7 @@ class Worker(ABC):
     def serp(self, query: str) -> dict:
         token = mint_internal_token(wallet=f"beast-{self.name}")
         r = requests.post(
-            f"{self.proxy_url}/x402/search",
+            f"{self.proxy_url}{self.PROXY_PATH}",
             json={"q": query, "num": 10},
             headers={"X-PAYMENT": token, "Content-Type": "application/json"},
             timeout=20,
@@ -68,13 +70,13 @@ class Worker(ABC):
                     return
                 try:
                     data = self.serp(kw)
-                    gap  = analyze(data, brand_domains=self.BRAND_DOMAINS)
+                    gap  = analyze(data, brand_domains=self.BRAND_DOMAINS, vertical=self.vertical)
                     if gap.priority_score < self.MIN_PRIORITY:
                         skipped += 1
                         logger.info("[%s] skip %-40s priority=%d severity=%s",
                                     self.name, kw, gap.priority_score, gap.gap_severity)
                         continue
-                    page_brief = synthesize_page_brief(self.brief, gap)
+                    page_brief = synthesize_page_brief(self.brief, gap, vertical=self.vertical)
                     path = self.process_keyword(silo_name, kw, page_brief)
                     logger.info("[%s] %-40s priority=%d severity=%-8s -> %s",
                                 self.name, kw, gap.priority_score, gap.gap_severity, path)

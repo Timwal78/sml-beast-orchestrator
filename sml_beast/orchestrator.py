@@ -29,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger("sml-beast.orchestrator")
 
 PROXY_HOST = os.environ.get("X402_PROXY_HOST", "127.0.0.1")
-PROXY_PORT = int(os.environ.get("X402_PROXY_PORT", "9402"))
+PROXY_PORT = int(os.environ.get("X402_PROXY_PORT", "4020"))
 PROXY_URL  = f"http://{PROXY_HOST}:{PROXY_PORT}"
 
 OUTPUT_ROOT = os.environ.get(

@@ -14,6 +14,7 @@ from sml_beast.workers.base      import Worker
 
 class XrplX402Worker(Worker):
     name = "xrpl_x402"
+    vertical = "xrpl_x402"
     BRIEF = XRPL_X402
     SILOS = XRPL_X402_SILOS
 
