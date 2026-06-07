@@ -123,7 +123,11 @@ def main(verticals: tuple[str, ...] | None = None) -> int:
                 stop.set()
                 return 1
 
-    logger.info("all verticals complete; proxy thread will exit with process")
+    logger.info("all verticals complete; keeping proxy thread alive for dashboard")
+    try:
+        stop.wait()
+    except KeyboardInterrupt:
+        pass
     return 0
 
 
