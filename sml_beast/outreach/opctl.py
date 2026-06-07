@@ -210,6 +210,15 @@ def cmd_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_alerts_sweep(args: argparse.Namespace) -> int:
+    """Run a one-shot alert sweep — kill switch transition, review backlog."""
+    from .alerts import check_and_alert
+
+    results = check_and_alert()
+    print(json.dumps([{"sent": r.sent, "reason": r.reason} for r in results], indent=2))
+    return 0
+
+
 def cmd_replies(args: argparse.Namespace) -> int:
     """Dump the operator review queue (ACCEPT + MANUAL_REVIEW + OPTOUT)."""
     from .reply_monitor import load_operator_queue
@@ -292,6 +301,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("recent", help="last N state changes")
     s.add_argument("n", nargs="?", type=int, default=20, help="number of events (default 20)")
     s.set_defaults(fn=cmd_recent)
+
+    s = sub.add_parser(
+        "alerts-sweep",
+        help="check kill switch / review backlog and emit any Discord alerts",
+    )
+    s.set_defaults(fn=cmd_alerts_sweep)
 
     s = sub.add_parser("replies", help="dump operator review queue (replies awaiting review)")
     s.set_defaults(fn=cmd_replies)

@@ -342,6 +342,16 @@ def run_cycle(
         summary["total_sent"],
         _DRY_RUN,
     )
+
+    # Operator notifications — best-effort, never breaks the cycle.
+    try:
+        from .alerts import alert_cycle_complete, check_and_alert
+
+        check_and_alert()
+        alert_cycle_complete(summary["total_attempted"], summary["total_sent"])
+    except Exception as e:
+        logger.warning("alert dispatch error: %s", e)
+
     return summary
 
 

@@ -28,6 +28,17 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (alerts phase)
+- `outreach/alerts.py` — Discord webhook operator alerts; types: KILL_SWITCH_
+  ACTIVATED/DEACTIVATED, LOW_HOT_WALLET, MANUAL_REVIEW_BACKLOG, CYCLE_COMPLETE;
+  per-type rate-limiting (24h window); injectable post_fn; failure-closed
+  (no webhook env → silent no-op)
+- `agent.run_cycle()` now emits CYCLE_COMPLETE + runs check_and_alert() after
+  each cycle (best-effort; never breaks the cycle)
+- `opctl alerts-sweep` — one-shot check for kill switch transition + backlog
+- `.github/workflows/bb7_alerts_sweep.yml` — runs every 15 min; detects state
+  changes between agent cycles
+
 ### Added (reply monitor phase)
 - `outreach/reply_monitor.py` — IMAP poller; drains UNSEEN, classifies via
   dispatcher.parse_reply, routes OPTOUT → state.mark_opted_out (only mutation),

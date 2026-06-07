@@ -19,8 +19,23 @@ python -m sml_beast.outreach.opctl metrics             # raw verification log
 python -m sml_beast.outreach.opctl metrics-stats       # aggregate conversion
 python -m sml_beast.outreach.opctl domain example.com  # single-domain entry
 python -m sml_beast.outreach.opctl recent 10           # last 10 state changes
+python -m sml_beast.outreach.opctl alerts-sweep        # one-shot Discord check
+python -m sml_beast.outreach.opctl poll                # IMAP drain + classify
+python -m sml_beast.outreach.opctl replies             # operator review queue
 python -m sml_beast.outreach.opctl dry-run             # full cycle, no I/O
 ```
+
+### Optional Discord alerts
+
+Set `BB7_DISCORD_ALERT_WEBHOOK` to a Discord webhook URL to enable alerts for:
+- Kill switch activation / deactivation (always)
+- Hot wallet balance below threshold (rate-limited to once per 24h)
+- Manual review backlog (>= 5 entries; rate-limited 24h)
+- Cycle complete (informational; not rate-limited)
+
+The `bb7_alerts_sweep.yml` cron runs every 15 minutes to catch transitions
+between full agent cycles. If `BB7_DISCORD_ALERT_WEBHOOK` is unset, every
+alert silently no-ops — alerts are optional, not required.
 
 None of these commands send a pitch, submit XRPL, or send SMTP. They are
 safe to run at any time. `dry-run` runs the full agent pipeline with both
