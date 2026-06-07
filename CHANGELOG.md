@@ -28,6 +28,16 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (shipping polish phase)
+- Console scripts: `bb7`, `bb7-preflight`, `bb7-agent` (registered in
+  `pyproject.toml [project.scripts]`). After `pip install -e ".[bb7]"`,
+  operator can type `bb7 status` instead of the full `python -m ...` path.
+- `tests/test_e2e_smoke.py` — true end-to-end integration test:
+  bounty_targets.json → enrich → review gate → balance → XRPL → state →
+  SMTP → thread map → opctl status → IMAP STOP reply → opt-out → second
+  cycle blocked. Proves the integration surface holds across all 14
+  outreach modules.
+
 ### Added (balance check phase)
 - `outreach/balance.py` — XRPL hot wallet balance query; converts raw XRP to
   USDC-equivalent via BB7_XRP_PRICE_USDC; healthy/unhealthy classification

@@ -391,10 +391,19 @@ def run_cycle(
 # ── CLI entry ────────────────────────────────────────────────────────────────
 
 
-if __name__ == "__main__":
+def _cli_entry() -> None:
+    """Console-script entry point for the `bb7-agent` command.
+
+    Wires up logging, runs one cycle, prints the summary as JSON, and
+    exits with code 0. Errors propagate as non-zero exit codes naturally
+    via the unhandled-exception path."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
     result = run_cycle()
     print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    _cli_entry()

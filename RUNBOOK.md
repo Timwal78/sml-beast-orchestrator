@@ -6,10 +6,16 @@ Deployment, configuration, and incident response procedures.
 
 ## 0. Day-to-day operator commands
 
-Use `opctl` for routine operator tasks instead of dropping into a Python REPL:
+After `pip install -e ".[bb7]"`, three short commands are on `$PATH`:
+- `bb7` — operator control surface (status, opt-out, kill, metrics, etc.)
+- `bb7-preflight` — preflight validator
+- `bb7-agent` — runs one outreach cycle (cron-friendly)
+
+Both `bb7 <cmd>` and `python -m sml_beast.outreach.opctl <cmd>` work identically.
 
 ```bash
-python -m sml_beast.outreach.opctl status              # full snapshot
+bb7 status                                             # full snapshot
+python -m sml_beast.outreach.opctl status              # equivalent
 python -m sml_beast.outreach.opctl opt-out example.com # permanent blocklist
 python -m sml_beast.outreach.opctl review-clear mastersheets       # +1 review
 python -m sml_beast.outreach.opctl review-clear-all xrpl_x402      # clear gate

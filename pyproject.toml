@@ -44,6 +44,14 @@ dev = [
 
 [project.scripts]
 sml-beast = "sml_beast.orchestrator:main"
+# bb7 — short operator alias for the BB7 outreach control surface.
+# Equivalent to `python -m sml_beast.outreach.opctl ...`. Lets the
+# operator type `bb7 status`, `bb7 kill on`, `bb7 balance`.
+bb7 = "sml_beast.outreach.opctl:main"
+# bb7-preflight — wraps the preflight validator so it can be cron'd.
+bb7-preflight = "sml_beast.outreach.preflight:main"
+# bb7-agent — runs one outreach cycle (used by the GitHub Actions cron).
+bb7-agent = "sml_beast.outreach.agent:_cli_entry"
 
 [tool.setuptools.packages.find]
 where = ["."]
