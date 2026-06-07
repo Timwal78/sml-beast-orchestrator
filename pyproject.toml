@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sml-beast-orchestrator"
+version = "0.1.0"
+description = "Autonomous x402-driven SEO orchestrator for ScriptMasterLabs verticals (MasterSheets, XRPL/x402)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "ScriptMasterLabs" }]
+dependencies = [
+  "flask>=3.0",
+  "requests>=2.31",
+]
+
+[project.scripts]
+sml-beast = "sml_beast.orchestrator:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sml_beast*"]
