@@ -28,9 +28,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sml-beast.orchestrator")
 
-PROXY_HOST = os.environ.get("X402_PROXY_HOST", "127.0.0.1")
-PROXY_PORT = int(os.environ.get("X402_PROXY_PORT", "4020"))
-PROXY_URL  = f"http://{PROXY_HOST}:{PROXY_PORT}"
+# Bind host: 0.0.0.0 in production (Render needs an externally-reachable port
+# so the dashboard works); 127.0.0.1 locally for the same security as before.
+# Render sets $PORT; we honor it. Workers always hit 127.0.0.1:$PORT internally.
+PROXY_BIND_HOST = "0.0.0.0" if os.environ.get("PORT") else os.environ.get("X402_PROXY_HOST", "127.0.0.1")
+PROXY_PORT      = int(os.environ.get("PORT") or os.environ.get("X402_PROXY_PORT", "4020"))
+PROXY_URL       = f"http://127.0.0.1:{PROXY_PORT}"
 
 OUTPUT_ROOT = os.environ.get(
     "BEAST_OUTPUT_ROOT",
@@ -39,14 +42,14 @@ OUTPUT_ROOT = os.environ.get(
 
 
 def _start_proxy(stop: threading.Event) -> threading.Thread:
-    """Run the x402 facilitator-proxy on its own thread. werkzeug single-thread
-    is fine — workers hit it serially from each vertical (rate-limit friendly)."""
-    app = create_app()
+    """Run the x402 facilitator-proxy on its own thread. werkzeug threaded is
+    fine — internal worker traffic is low-volume and the dashboard is
+    read-only. On Render the same process binds to $PORT so the operator
+    can hit /dashboard externally."""
+    app = create_app(output_root=OUTPUT_ROOT)
 
     def _serve():
-        # Use the production-grade WSGI server only when deploying; werkzeug
-        # is fine for the local orchestrator because traffic is internal.
-        app.run(host=PROXY_HOST, port=PROXY_PORT, threaded=True, use_reloader=False)
+        app.run(host=PROXY_BIND_HOST, port=PROXY_PORT, threaded=True, use_reloader=False)
 
     t = threading.Thread(target=_serve, name="x402-proxy", daemon=True)
     t.start()

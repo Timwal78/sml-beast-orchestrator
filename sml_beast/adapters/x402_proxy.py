@@ -107,9 +107,18 @@ def _verify_payload(payload: dict) -> tuple[bool, str]:
     return True, meta.get("wlt", "agent")
 
 
-def create_app() -> Flask:
+def create_app(output_root: str | None = None) -> Flask:
     app = Flask(__name__)
     serper = SerperClient()  # raises immediately if SERPER_API_KEY missing
+
+    # Mount the operator dashboard if an output root is known. It's read-only
+    # over the same ledger ref the proxy mutates, so the panel reflects live
+    # state with no polling layer. If no output_root is given the dashboard
+    # falls back to BEAST_OUTPUT_ROOT or repo-root/output.
+    from sml_beast.dashboard import register_dashboard
+    root = output_root or os.environ.get("BEAST_OUTPUT_ROOT") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "output")
+    register_dashboard(app, os.path.abspath(root), (_ledger_lock, _ledger))
 
     @app.route("/health", methods=["GET"])
     def health():
@@ -197,5 +206,6 @@ def mint_internal_token(wallet: str = "beast-orchestrator", ttl_s: int = 3600) -
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("X402_PROXY_PORT", "4020"))
+    # Honor Render's $PORT; fall back to X402_PROXY_PORT for local dev.
+    port = int(os.environ.get("PORT") or os.environ.get("X402_PROXY_PORT", "4020"))
     create_app().run(host="0.0.0.0", port=port)
