@@ -1,8 +1,11 @@
 # BB7 — Autonomous Backlink Outreach Agent
 
-> **Status:** DESIGN LOCKED — sealed after architect red-team. Implementation
-> may proceed in dependency order (guardrails.py first).
-> **Implementation:** NONE yet. Code lands in subsequent commits.
+> **Status:** DESIGN LOCKED v2 — operator ruling on custody folded in.
+> **Custody mandate:** SML DOES NOT CUSTODY. Every fund movement is
+> fire-and-forget. Once a Payment leaves the hot wallet, it is gone
+> from SML's control. No escrow, no contingent holds, no settlement
+> windows where SML controls release/refund. This overrides §5 of the
+> v1 sealed design. See §5 below for the simplified payment model.
 
 ## 0. Mandate
 
@@ -192,98 +195,88 @@ The anchor resource is the highest-priority IRL/x402 page.
 All template variables are required; the generator refuses to send a
 pitch with any unfilled slot. No silent fallbacks.
 
-## 5. XRPL payment integration — pre-settled demo + optional escrow uplift
+## 5. XRPL payment — fire-and-forget; SML DOES NOT CUSTODY
 
-**Cardinal rule:** the payment is settled **before** the pitch lands.
-The recipient sees real funds in their wallet at read-time, with a
-transaction hash they can verify in <50ms. This is the entire point of
-the live-demo framing — the value transfer is the proof, not the
-promise.
+**Operator ruling (overrides v1 §5):** the agent issues unconditional
+`Payment` transactions only. Once a payment leaves the hot wallet it is
+gone from SML's control. No escrow. No contingent holds. No multi-step
+settlement where SML controls fund release. No 30-day windows where
+SML's wallet seed can claw back funds via `EscrowCancel`.
 
-The optional escrow uplift (§5.4) is reserved for a second-tier strategic
-pitch (priority_score ≥ 30) where the operator offers an additional
-premium fee, contingent on link verification, on top of the unconditional
-demo payment.
+This collapses the v1 design's two-tier (demo + premium escrow uplift)
+into a single tier: fire-and-forget demo payments. The strategic top-tier
+(DR 70+, 25–250 USDC) remains operator-driven and outside BB7's
+autonomy, but even there the operator-driven channel must use direct
+`Payment` — never escrow.
 
-### 5.1 Demo settlement (default path, all pitches)
+### 5.1 Lifecycle — single path
 
-| State | Trigger | XRPL action |
-|---|---|---|
-| `PROPOSED` | Pitch generated; address enriched | — |
-| `DEMO_SENT` | Standard fee transferred unconditionally to recipient address | `Payment` tx |
-| `PITCH_DELIVERED` | Email dispatched with tx hash in body | — |
-| `LINK_OBSERVED` | Verifier confirms live link (optional outcome) | logged only |
-| `OPTED_OUT` | Recipient sent STOP | domain → blocklist |
+| State | Trigger | XRPL action | SML retention? |
+|---|---|---|---|
+| `PROPOSED` | Pitch generated; address enriched | — | n/a |
+| `DEMO_SENT` | Standard fee transferred unconditionally | `Payment` tx | NONE — funds left wallet |
+| `PITCH_DELIVERED` | Email dispatched with tx hash in body | — | n/a |
+| `LINK_OBSERVED` | Verifier confirms live link (analytics only) | logged only | n/a |
+| `OPTED_OUT` | Recipient sent STOP | domain → blocklist | n/a |
 
-Funds are gone the moment `DEMO_SENT` succeeds. No refund path. This is
-intentional and correct: it removes the "did they actually pay?" friction
-from the conversation entirely. The 0.50 USDC daily ceiling (lifted to
-20.00 USDC per §6) is the only ceiling on bleed.
+There is no path where SML retains the funds between the pitch and the
+link landing. The pitch IS the payment. The link is voluntary.
 
-### 5.4 Optional escrow uplift (premium tier, priority_score ≥ 30)
+### 5.2 Why this is the only defensible model
 
-For high-value targets the operator may layer a contingent premium on
-top of the demo payment. This is the only path where the original
-escrow design (§5.2 below) applies, and it must be disclosed in the
-pitch body as a separate optional offer.
+- **No custody = no money-transmitter exposure.** SML never holds another
+  party's funds. The demo payment leaves immediately on Payment tx
+  finalization (sub-50ms on XRPL).
+- **No clawback = no "is this really a gift?" ambiguity.** Under the
+  v1 escrow design a regulator could argue SML "paid" only if the link
+  appeared — restoring the "consideration for editorial coverage" frame
+  the v1 reframe was supposed to escape. Fire-and-forget removes that
+  argument entirely.
+- **No 30-day reconciliation = no operational tail.** The agent's
+  responsibility ends when the Payment tx returns success. No daily
+  verification cron tied to money movement. No `EscrowFinish` /
+  `EscrowCancel` codepaths to maintain or get wrong.
+- **No premium tier in agent autonomy.** All agent pitches use the
+  standard fee schedule. Tiering by bounty priority_score still happens
+  but only to gate which targets get pitched at all, not to vary the
+  payment amount.
 
-| State | Trigger | XRPL action |
-|---|---|---|
-| `ESCROW_FUNDED` | Recipient signals interest in the premium tier | `EscrowCreate` with `Condition` = preimage hash |
-| `AWAITING_PROOF` | Escrow on ledger; verifier polling | — |
-| `SETTLED` | Verifier confirms live link | `EscrowFinish` releases premium |
-| `EXPIRED_REFUNDED` | 30 days elapsed | `EscrowCancel` returns to operator |
+### 5.3 Verifier — observation-only
 
-### 5.2 Escrow construction (XRPL native, premium tier only)
+The verifier loop still exists but is decoupled from money movement.
+Its sole job is analytics: did the link land, what's the conversion
+rate per vertical, which target classes convert best?
 
-- `EscrowCreate` with `Condition` = `PREIMAGE-SHA-256` hash of a
-  per-pitch nonce known only to the verifier service
-- `FinishAfter` = `pitch_accepted_at + 24h` (cooldown — operator can
-  manually void within the first day if the target turns out to be a
-  spam trap)
-- `CancelAfter` = `pitch_accepted_at + 30d` (max verification window)
-- `Destination` = target wallet address (already collected during demo
-  settlement)
+  1. Reads `_internal/outreach_ledger.jsonl` for all `PITCH_DELIVERED` records
+  2. For each, fetches the pitched URL on a weekly cadence for 90 days
+  3. Logs link presence + nofollow status + anchor match into
+     `_internal/conversion_metrics.jsonl`
+  4. Surfaces aggregate conversion rates on the BB6 dashboard
 
-When verification succeeds the verifier reveals the preimage, the agent
-submits `EscrowFinish` with the fulfillment, and the ledger releases.
+If a link is added then removed during the 90-day window, the domain is
+added to the cooldown-blocklist for 365 days (no future agent pitches).
+Recourse: none. We can't reclaim the funds. The defensive cost is that
+we don't pitch them again.
 
-**Why XRPL native (not the SqueezeOS in-memory `/api/settlement`):** the
-SqueezeOS settlement engine is explicitly in-memory (per `CLAUDE.md`) and
-resets on every redeploy. The 30-day verification window requires
-persistent on-ledger state.
+### 5.4 What this design explicitly removes from v1
 
-### 5.3 Verification loop
+| v1 component | v2 status |
+|---|---|
+| `EscrowCreate` / `EscrowFinish` / `EscrowCancel` | REMOVED |
+| `Condition` / `Fulfillment` preimage construction | REMOVED |
+| Premium tier 10 USDC contingent uplift | REMOVED |
+| 24h `FinishAfter` cooldown | REMOVED |
+| 30d `CancelAfter` verification window | REMOVED |
+| Verifier in the money-movement path | REMOVED — verifier is observation-only |
+| `_get_daily_ledger` `AWAITING_PROOF` state | REMOVED |
+| `_get_daily_ledger` `EXPIRED_REFUNDED` state | REMOVED |
+| `_internal/escrows.json` | NEVER EXISTS |
+| `MANUALLY_VOIDED` state with EscrowCancel | REMOVED — operator just stops pitching |
 
-A daily cron task (`verify_outreach.py`):
-
-1. Loads all `AWAITING_PROOF` escrows from `outreach_state.json`
-2. For each pitched URL, fetches the live page (respecting `robots.txt`
-   and a 10s timeout)
-3. Parses the DOM and walks every `<a>` element
-4. Confirms the link exists at the exact target slug from the pitch
-5. Confirms `rel` does **not** contain `nofollow`, `sponsored`, or `ugc`
-6. Confirms the anchor text matches one of the approved variants from
-   the pitch (within a Levenshtein distance of 3 — exact match preferred)
-7. Records the verification payload `{url, href, rel, anchor, ts}` and
-   computes `SHA-256(payload || nonce)`
-8. If the hash matches the escrow's `Condition`, submits `EscrowFinish`
-
-If verification fails on day N, the loop retries on day N+1 with
-exponential backoff up to the `CancelAfter` deadline. Three consecutive
-4xx responses move the pitch to `MANUALLY_VOIDED` for operator review
-(possible site migration; the human decides).
-
-### 5.4 Anti-gaming
-
-- Verifier fetches from a residential-IP proxy pool to detect cloaking
-- Verifier checks Google's `site:<domain>` index after 7 days — if the
-  page isn't indexed (target may have noindex'd it post-payment), flag
-  for manual review
-- Verifier re-checks weekly for 90 days post-settlement; if the link is
-  removed within that window the domain is added to the permanent
-  blocklist and noted in a public `link-rot-registry.json` (defensive
-  publishing — discourages take-and-bail behavior)
+**Module impact:** the v1 design specified `sml_beast/outreach/escrow.py`
+as the highest-blast-radius module. Under v2 there is no `escrow.py`.
+The XRPL surface collapses to a single `xrpl_client.py` module that
+exposes one operation: `send_payment(destination, amount_usdc) -> tx_hash`.
 
 ## 6. Kill switch & guardrails — LOCKED VALUES
 
@@ -294,8 +287,8 @@ fresh deploy.
 | Guardrail | LOCKED value | Configurable via |
 |---|---|---|
 | **Standard demo fee (default tier)** | **5.00 USDC** | `OUTREACH_STANDARD_FEE_USDC` |
-| **Premium tier fee** (priority_score ≥ 30) | **10.00 USDC** | `OUTREACH_PREMIUM_FEE_USDC` |
-| **Agent autonomy hard cap per pitch** | **10.00 USDC** | hardcoded — code edit + deploy required |
+| ~~Premium tier fee~~ | ~~REMOVED v2~~ (no-custody) | `OUTREACH_PREMIUM_FEE_USDC` retained as constant for downstream sanity-check tests |
+| **Agent autonomy hard cap per pitch** | **5.00 USDC** (tightened from 10.00 since premium tier no longer exists) | hardcoded — code edit + deploy required |
 | Daily USDC spend ceiling (hot wallet) | **20.00 USDC / 24h** | `OUTREACH_DAILY_CEILING_USDC` |
 | Hot wallet max balance | **100.00 USDC** (5× ceiling) | `OUTREACH_HOT_WALLET_MAX` |
 | Per-domain cooldown | **14 days** | `OUTREACH_DOMAIN_COOLDOWN_DAYS` |
@@ -368,27 +361,33 @@ AWAITING_PROOF, green = SETTLED, magenta = REFUNDED / VOIDED).
 Aesthetic stays Beastmode — same palette guard tests will apply to the
 new panel markup.
 
-## 8. Implementation scope (when greenlit)
+## 8. Implementation scope — REVISED for no-custody
 
-| Module | Purpose |
-|---|---|
-| `sml_beast/outreach/__init__.py` | Public surface |
-| `sml_beast/outreach/enricher.py` | Source priority pipeline (§3) |
-| `sml_beast/outreach/templates.py` | Vertical-keyed pitch templates (§4) |
-| `sml_beast/outreach/escrow.py` | XRPL `EscrowCreate` / `Finish` / `Cancel` wrappers |
-| `sml_beast/outreach/verifier.py` | Daily verification loop (§5.3) |
-| `sml_beast/outreach/state.py` | Restart-safe per-domain state machine |
-| `sml_beast/outreach/guardrails.py` | All caps, kill switch, hard stops (§6) |
-| `sml_beast/outreach/agent.py` | Orchestrator entrypoint; cron-friendly |
-| `tests/test_outreach_*.py` | Per-module tests; **full mock of XRPL** — no live ledger calls in unit tests |
+| Module | Purpose | Status |
+|---|---|---|
+| `sml_beast/outreach/__init__.py` | Public surface | ✅ shipped |
+| `sml_beast/outreach/guardrails.py` | All caps, kill switch, hard stops (§6) | ✅ shipped |
+| `sml_beast/outreach/state.py` | Restart-safe per-domain state machine | pending |
+| `sml_beast/outreach/xrpl_client.py` | **REPLACES escrow.py.** Exposes `send_payment(dst, amt) -> tx_hash`. No escrow primitives. | pending |
+| `sml_beast/outreach/enricher.py` | Source priority pipeline (§3) | pending |
+| `sml_beast/outreach/templates.py` | Vertical-keyed pitch templates (§4) | pending |
+| `sml_beast/outreach/dispatcher.py` | SMTP send with SPF/DKIM/DMARC alignment | pending |
+| `sml_beast/outreach/verifier.py` | Observation-only link presence + conversion analytics | pending |
+| `sml_beast/outreach/agent.py` | Orchestrator entrypoint; cron-friendly | pending |
+| `tests/test_outreach_*.py` | Per-module tests; full mock of XRPL + SMTP — no live calls in unit tests | per-module |
 
-Estimated stack-rank by risk:
+Revised stack-rank by risk:
 
-1. **escrow.py** — highest blast radius; ledger writes; build last
-2. **guardrails.py** — gates everything else; build first, lock with tests
-3. **state.py** — restart-safe persistence; build second
-4. **enricher.py + templates.py + verifier.py** — pure functions; parallel
-5. **agent.py** — composition; trivial once everything below it is tested
+1. **xrpl_client.py** — money movement; build with full unit-test mock of
+   the XRPL submit + result codes; never tests against a real ledger
+2. **guardrails.py** — gates everything else (✅ done)
+3. **state.py** — restart-safe persistence; ships next
+4. **enricher.py + templates.py + dispatcher.py + verifier.py** — pure-ish
+   modules; parallel
+5. **agent.py** — composition; trivial once the rest is tested
+
+Removed from v1 because of the no-custody ruling:
+- `escrow.py` (entire module — never created)
 
 ## 9. Locked decisions (architect rulings — closed)
 
