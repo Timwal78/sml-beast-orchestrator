@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from sml_beast.adapters.x402_proxy import create_app
 from sml_beast.workers.mastersheets import MasterSheetsWorker
-from sml_beast.workers.xrpl_x402    import XrplX402Worker
+from sml_beast.workers.xrpl_x402 import XrplX402Worker
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO"),
@@ -31,9 +31,11 @@ logger = logging.getLogger("sml-beast.orchestrator")
 # Bind host: 0.0.0.0 in production (Render needs an externally-reachable port
 # so the dashboard works); 127.0.0.1 locally for the same security as before.
 # Render sets $PORT; we honor it. Workers always hit 127.0.0.1:$PORT internally.
-PROXY_BIND_HOST = "0.0.0.0" if os.environ.get("PORT") else os.environ.get("X402_PROXY_HOST", "127.0.0.1")
-PROXY_PORT      = int(os.environ.get("PORT") or os.environ.get("X402_PROXY_PORT", "4020"))
-PROXY_URL       = f"http://127.0.0.1:{PROXY_PORT}"
+PROXY_BIND_HOST = (
+    "0.0.0.0" if os.environ.get("PORT") else os.environ.get("X402_PROXY_HOST", "127.0.0.1")
+)
+PROXY_PORT = int(os.environ.get("PORT") or os.environ.get("X402_PROXY_PORT", "4020"))
+PROXY_URL = f"http://127.0.0.1:{PROXY_PORT}"
 
 OUTPUT_ROOT = os.environ.get(
     "BEAST_OUTPUT_ROOT",
@@ -55,6 +57,7 @@ def _start_proxy(stop: threading.Event) -> threading.Thread:
     t.start()
     # Wait until the proxy responds before letting workers start
     import requests
+
     for _ in range(50):
         try:
             if requests.get(f"{PROXY_URL}/health", timeout=1).ok:
@@ -75,33 +78,39 @@ def main(verticals: tuple[str, ...] | None = None) -> int:
 
     stop = threading.Event()
 
-    def _shutdown(sig, frame):  # noqa: ARG001
+    def _shutdown(sig, frame):
         logger.info("signal %s — initiating clean shutdown", sig)
         stop.set()
 
-    signal.signal(signal.SIGINT,  _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
-    proxy_thread = _start_proxy(stop)
+    # Proxy runs in a daemon thread; we don't need to hold the handle since
+    # process exit reaps it.
+    _start_proxy(stop)
 
     requested = set(verticals or ("mastersheets", "xrpl_x402"))
     workers: list = []
     if "mastersheets" in requested:
-        workers.append(MasterSheetsWorker(
-            brief=MasterSheetsWorker.BRIEF,
-            silos=MasterSheetsWorker.SILOS,
-            proxy_url=PROXY_URL,
-            output_dir=os.path.join(OUTPUT_ROOT, "mastersheets"),
-            stop=stop,
-        ))
+        workers.append(
+            MasterSheetsWorker(
+                brief=MasterSheetsWorker.BRIEF,
+                silos=MasterSheetsWorker.SILOS,
+                proxy_url=PROXY_URL,
+                output_dir=os.path.join(OUTPUT_ROOT, "mastersheets"),
+                stop=stop,
+            )
+        )
     if "xrpl_x402" in requested:
-        workers.append(XrplX402Worker(
-            brief=XrplX402Worker.BRIEF,
-            silos=XrplX402Worker.SILOS,
-            proxy_url=PROXY_URL,
-            output_dir=os.path.join(OUTPUT_ROOT, "xrpl"),
-            stop=stop,
-        ))
+        workers.append(
+            XrplX402Worker(
+                brief=XrplX402Worker.BRIEF,
+                silos=XrplX402Worker.SILOS,
+                proxy_url=PROXY_URL,
+                output_dir=os.path.join(OUTPUT_ROOT, "xrpl"),
+                stop=stop,
+            )
+        )
 
     logger.info("launching %d workers (verticals=%s)", len(workers), sorted(requested))
     with ThreadPoolExecutor(max_workers=len(workers)) as pool:

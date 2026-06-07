@@ -12,7 +12,7 @@ import shutil
 import tempfile
 import threading
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 class _GuardBase(unittest.TestCase):
@@ -24,6 +24,7 @@ class _GuardBase(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="beast-guard-")
         os.environ["BEAST_OUTPUT_ROOT"] = self.tmp
         import sml_beast.outreach.guardrails as g
+
         importlib.reload(g)
         self.g = g
 
@@ -33,7 +34,6 @@ class _GuardBase(unittest.TestCase):
 
 
 class KillSwitchTests(_GuardBase):
-
     def test_no_kill_switch_passes(self):
         # No file -> no raise
         self.g.OutreachGuardrails.enforce_kill_switch()
@@ -69,7 +69,6 @@ class KillSwitchTests(_GuardBase):
 
 
 class DomainValidationTests(_GuardBase):
-
     def test_gov_domain_rejected(self):
         self.assertFalse(self.g.OutreachGuardrails.validate_target_domain("whitehouse.gov"))
         self.assertFalse(self.g.OutreachGuardrails.validate_target_domain("example.GOV"))
@@ -110,7 +109,6 @@ class DomainValidationTests(_GuardBase):
 
 
 class FeeCapTests(_GuardBase):
-
     def test_zero_fee_rejected(self):
         self.assertFalse(self.g.OutreachGuardrails.authorize_transaction(0.0))
 
@@ -121,16 +119,21 @@ class FeeCapTests(_GuardBase):
         self.assertFalse(self.g.OutreachGuardrails.authorize_transaction(None))
 
     def test_standard_fee_passes(self):
-        self.assertTrue(self.g.OutreachGuardrails.authorize_transaction(
-            self.g.OUTREACH_STANDARD_FEE_USDC))
+        self.assertTrue(
+            self.g.OutreachGuardrails.authorize_transaction(self.g.OUTREACH_STANDARD_FEE_USDC)
+        )
 
     def test_fee_at_autonomy_cap_passes(self):
-        self.assertTrue(self.g.OutreachGuardrails.authorize_transaction(
-            self.g.OUTREACH_MAX_AUTONOMY_FEE_USDC))
+        self.assertTrue(
+            self.g.OutreachGuardrails.authorize_transaction(self.g.OUTREACH_MAX_AUTONOMY_FEE_USDC)
+        )
 
     def test_fee_above_autonomy_cap_rejected(self):
-        self.assertFalse(self.g.OutreachGuardrails.authorize_transaction(
-            self.g.OUTREACH_MAX_AUTONOMY_FEE_USDC + 0.01))
+        self.assertFalse(
+            self.g.OutreachGuardrails.authorize_transaction(
+                self.g.OUTREACH_MAX_AUTONOMY_FEE_USDC + 0.01
+            )
+        )
 
     def test_fee_at_strategic_tier_rejected_from_agent_lane(self):
         # 25.00 USDC = strategic top-tier, operator-driven, NOT agent autonomy
@@ -138,7 +141,6 @@ class FeeCapTests(_GuardBase):
 
 
 class DailyCeilingTests(_GuardBase):
-
     def test_first_pitch_under_ceiling_authorized(self):
         self.assertTrue(self.g.OutreachGuardrails.authorize_transaction(5.00))
 
@@ -162,7 +164,7 @@ class DailyCeilingTests(_GuardBase):
 
     def test_date_rollover_resets_ledger(self):
         # Pre-stage a fully-spent ledger dated yesterday
-        yest = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+        yest = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
         sd = self.g.state_dir()
         sd.mkdir(parents=True, exist_ok=True)
         with open(self.g.ledger_path(), "w") as f:
@@ -182,10 +184,11 @@ class DailyCeilingTests(_GuardBase):
 
 
 class PitchCapTests(_GuardBase):
-
     def test_warmup_cap_is_three(self):
         for _ in range(self.g.OUTREACH_DAILY_PITCH_CAP_WARMUP):
-            self.assertTrue(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True))
+            self.assertTrue(
+                self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True)
+            )
             self.g.OutreachGuardrails.commit_transaction(5.00)
         # Fourth pitch in warmup blocked on pitch cap
         self.assertFalse(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True))
@@ -193,7 +196,9 @@ class PitchCapTests(_GuardBase):
     def test_steady_cap_is_ten(self):
         # 10 pitches at 2.00 each = 20.00 (== ceiling), 10 pitches (== steady cap)
         for _ in range(10):
-            self.assertTrue(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=False))
+            self.assertTrue(
+                self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=False)
+            )
             self.g.OutreachGuardrails.commit_transaction(2.00)
         # 11th blocked on pitch cap
         self.assertFalse(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=False))
@@ -201,7 +206,9 @@ class PitchCapTests(_GuardBase):
     def test_warmup_cap_lower_than_steady(self):
         # Fill the 3 warmup slots
         for _ in range(3):
-            self.assertTrue(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True))
+            self.assertTrue(
+                self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True)
+            )
             self.g.OutreachGuardrails.commit_transaction(5.00)
         # 4th in warmup mode: blocked
         self.assertFalse(self.g.OutreachGuardrails.authorize_pitch_dispatch(is_warmup_period=True))
@@ -212,7 +219,6 @@ class PitchCapTests(_GuardBase):
 
 
 class LedgerAtomicityTests(_GuardBase):
-
     def test_concurrent_commits_dont_corrupt_ledger(self):
         # 10 threads each commit 1.00 USDC twice. End state must be 20.00 USDC,
         # 20 pitches. Without the lock we'd see lost updates from interleaved
@@ -225,8 +231,10 @@ class LedgerAtomicityTests(_GuardBase):
                 self.g.OutreachGuardrails.commit_transaction(1.00)
 
         threads = [threading.Thread(target=worker) for _ in range(N_THREADS)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         with open(self.g.ledger_path()) as f:
             ledger = json.load(f)
@@ -235,7 +243,6 @@ class LedgerAtomicityTests(_GuardBase):
 
 
 class LedgerCorruptionTests(_GuardBase):
-
     def test_corrupted_ledger_treated_as_fresh(self):
         sd = self.g.state_dir()
         sd.mkdir(parents=True, exist_ok=True)
@@ -246,13 +253,17 @@ class LedgerCorruptionTests(_GuardBase):
 
 
 class PathResolutionTests(_GuardBase):
-
     def test_paths_honor_beast_output_root(self):
         # All four path helpers must root inside the configured tempdir
-        for p in (self.g.kill_switch_path(), self.g.state_dir(),
-                  self.g.ledger_path(), self.g.blocklist_path()):
-            self.assertTrue(str(p).startswith(self.tmp),
-                            f"{p} did not honor BEAST_OUTPUT_ROOT={self.tmp}")
+        for p in (
+            self.g.kill_switch_path(),
+            self.g.state_dir(),
+            self.g.ledger_path(),
+            self.g.blocklist_path(),
+        ):
+            self.assertTrue(
+                str(p).startswith(self.tmp), f"{p} did not honor BEAST_OUTPUT_ROOT={self.tmp}"
+            )
 
 
 if __name__ == "__main__":

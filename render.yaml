@@ -14,7 +14,10 @@ services:
     region: oregon
     autoDeploy: true
     healthCheckPath: /health
-    buildCommand: pip install -r requirements.txt
+    # Install via pyproject.toml so deps stay single-sourced. The `bb7`
+    # extra pulls xrpl-py + beautifulsoup4 + lxml for the outreach agent
+    # — required once the BB7 modules land their callers.
+    buildCommand: pip install -e ".[bb7]"
     startCommand: python -m sml_beast.orchestrator
     envVars:
       # Required — orchestrator aborts at startup without these
@@ -22,6 +25,17 @@ services:
         sync: false              # set in Render dashboard, do not commit
       - key: X402_PROXY_SECRET
         sync: false              # HMAC secret; must match what mints tokens
+      # Required for the operator dashboard. Without this, the dashboard
+      # routes are NOT registered (failure-closed). Generate with
+      # `openssl rand -hex 32` and set in the Render dashboard env panel.
+      - key: DASHBOARD_AUTH_TOKEN
+        sync: false
+      # Required once BB7 outreach ships. Until then, leaving this unset
+      # keeps the agent inert. The seed signs Payment txs; never commit it.
+      - key: BB7_XRPL_WALLET_SEED
+        sync: false
+      - key: BB7_XRPL_NETWORK
+        value: testnet            # flip to "mainnet" after operator sign-off
       # Optional — sensible defaults already in code
       - key: X402_SERP_PRICE_USDC
         value: "0.001"

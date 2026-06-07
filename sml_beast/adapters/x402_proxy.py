@@ -34,44 +34,48 @@ X402_VERSION = 1
 # Operator subsidy: the proxy charges agents in a virtual ledger; real money
 # leaves the operator's Serper subscription. When public x402 SERP APIs exist
 # the price will pass through to the upstream call.
-PRICE_USDC          = os.environ.get("X402_SERP_PRICE_USDC", "0.001")
-NETWORK             = os.environ.get("X402_NETWORK", "base-sepolia")
-PAY_TO              = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
-SECRET              = os.environ.get("X402_PROXY_SECRET", "")  # HMAC secret; required in prod
+PRICE_USDC = os.environ.get("X402_SERP_PRICE_USDC", "0.001")
+NETWORK = os.environ.get("X402_NETWORK", "base-sepolia")
+PAY_TO = os.environ.get("X402_PAY_TO", "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700")
+SECRET = os.environ.get("X402_PROXY_SECRET", "")  # HMAC secret; required in prod
 
 # USDC asset addresses by network (matches CDP facilitator)
 USDC = {
-    "base":         {"asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-                     "extra": {"name": "USD Coin", "version": "2"}},
-    "base-sepolia": {"asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-                     "extra": {"name": "USDC", "version": "2"}},
+    "base": {
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "extra": {"name": "USD Coin", "version": "2"},
+    },
+    "base-sepolia": {
+        "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        "extra": {"name": "USDC", "version": "2"},
+    },
 }
 
 _ledger_lock = Lock()
-_ledger: dict[str, dict] = {}   # agent_wallet -> {paid_usdc, calls, last_ts}
+_ledger: dict[str, dict] = {}  # agent_wallet -> {paid_usdc, calls, last_ts}
 
 
 def _atomic(price: str) -> str:
-    return str(int(round(float(price) * 1_000_000)))
+    return str(round(float(price) * 1_000_000))
 
 
 def _requirements(resource: str) -> dict:
     cfg = USDC.get(NETWORK, USDC["base-sepolia"])
     return {
-        "scheme":            "exact",
-        "network":           NETWORK,
+        "scheme": "exact",
+        "network": NETWORK,
         "maxAmountRequired": _atomic(PRICE_USDC),
-        "resource":          resource,
-        "description":       "Live SERP query — Google search result + People Also Ask + related searches.",
-        "mimeType":          "application/json",
-        "payTo":             PAY_TO,
+        "resource": resource,
+        "description": "Live SERP query — Google search result + People Also Ask + related searches.",
+        "mimeType": "application/json",
+        "payTo": PAY_TO,
         "maxTimeoutSeconds": 60,
-        "asset":             cfg["asset"],
-        "extra":             cfg["extra"],
+        "asset": cfg["asset"],
+        "extra": cfg["extra"],
     }
 
 
-def _402(reqs: dict, reason: str = "") -> tuple:
+def _402(reqs: dict, reason: str = ""):
     return make_response(
         jsonify({"x402Version": X402_VERSION, "accepts": [reqs], "error": reason}),
         402,
@@ -116,40 +120,50 @@ def create_app(output_root: str | None = None) -> Flask:
     # state with no polling layer. If no output_root is given the dashboard
     # falls back to BEAST_OUTPUT_ROOT or repo-root/output.
     from sml_beast.dashboard import register_dashboard
-    root = output_root or os.environ.get("BEAST_OUTPUT_ROOT") or os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "output")
+
+    root = (
+        output_root
+        or os.environ.get("BEAST_OUTPUT_ROOT")
+        or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "output")
+    )
     register_dashboard(app, os.path.abspath(root), (_ledger_lock, _ledger))
 
     @app.route("/health", methods=["GET"])
     def health():
         with _ledger_lock:
             total_calls = sum(e["calls"] for e in _ledger.values())
-        return jsonify({
-            "status":       "ok",
-            "network":      NETWORK,
-            "price_usdc":   PRICE_USDC,
-            "total_calls":  total_calls,
-            "ts":           time.time(),
-        })
+        return jsonify(
+            {
+                "status": "ok",
+                "network": NETWORK,
+                "price_usdc": PRICE_USDC,
+                "total_calls": total_calls,
+                "ts": time.time(),
+            }
+        )
 
     @app.route("/.well-known/x402", methods=["GET"])
     def discovery():
         cfg = USDC.get(NETWORK, USDC["base-sepolia"])
-        return jsonify({
-            "x402Version":  X402_VERSION,
-            "operator":     "ScriptMasterLabs",
-            "network":      NETWORK,
-            "asset":        cfg["asset"],
-            "payTo":        PAY_TO,
-            "facilitator": f"{request.host_url.rstrip('/')}/x402",
-            "discoverable": True,
-            "resources": [{
-                "path":        "/api/v1/m2m/serp",
-                "method":      "POST",
-                "price":       {"amountUSDC": PRICE_USDC, "asset": "USDC", "network": NETWORK},
-                "description": "Live Google SERP — organic, people-also-ask, related.",
-            }],
-        })
+        return jsonify(
+            {
+                "x402Version": X402_VERSION,
+                "operator": "ScriptMasterLabs",
+                "network": NETWORK,
+                "asset": cfg["asset"],
+                "payTo": PAY_TO,
+                "facilitator": f"{request.host_url.rstrip('/')}/x402",
+                "discoverable": True,
+                "resources": [
+                    {
+                        "path": "/api/v1/m2m/serp",
+                        "method": "POST",
+                        "price": {"amountUSDC": PRICE_USDC, "asset": "USDC", "network": NETWORK},
+                        "description": "Live Google SERP — organic, people-also-ask, related.",
+                    }
+                ],
+            }
+        )
 
     @app.route("/api/v1/m2m/serp", methods=["POST"])
     def search():
@@ -174,18 +188,17 @@ def create_app(output_root: str | None = None) -> Flask:
             return jsonify({"error": "q (query string) required"}), 400
 
         try:
-            data = serper.search(q,
-                                 gl=body.get("gl", "us"),
-                                 hl=body.get("hl", "en"),
-                                 num=int(body.get("num", 10)))
+            data = serper.search(
+                q, gl=body.get("gl", "us"), hl=body.get("hl", "en"), num=int(body.get("num", 10))
+            )
         except SerperError as e:
             return jsonify({"error": "upstream_unavailable", "detail": str(e)}), 502
 
         with _ledger_lock:
             entry = _ledger.setdefault(wallet, {"paid_usdc": 0.0, "calls": 0, "last_ts": 0})
             entry["paid_usdc"] += float(PRICE_USDC)
-            entry["calls"]     += 1
-            entry["last_ts"]    = time.time()
+            entry["calls"] += 1
+            entry["last_ts"] = time.time()
 
         return jsonify({"x402Version": X402_VERSION, "wallet": wallet, "result": data})
 
@@ -200,7 +213,7 @@ def mint_internal_token(wallet: str = "beast-orchestrator", ttl_s: int = 3600) -
         raise RuntimeError("X402_PROXY_SECRET not set — cannot mint internal token")
     meta = {"wlt": wallet, "exp": int(time.time()) + ttl_s, "amt": _atomic(PRICE_USDC)}
     body = base64.urlsafe_b64encode(json.dumps(meta).encode()).decode().rstrip("=")
-    sig  = hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
     payload = {"body": body, "signature": sig}
     return base64.b64encode(json.dumps(payload).encode()).decode()
 

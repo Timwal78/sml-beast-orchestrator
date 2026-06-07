@@ -29,7 +29,6 @@ import time
 
 from .link_graph import render_cross_link_block
 
-
 SAMEAS_XRPL_X402 = [
     "https://github.com/timwal78/squeezeos",
     "https://squeezeos-api.onrender.com",
@@ -72,9 +71,9 @@ def _cta_for_intent(intents: list[str], brief: dict) -> str:
 
 
 def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, str]:
-    gap   = page_brief.get("_gap", {})
-    paa   = gap.get("paa", [])
-    rel   = gap.get("semantic_cluster", [])
+    gap = page_brief.get("_gap", {})
+    paa = gap.get("paa", [])
+    rel = gap.get("semantic_cluster", [])
     intents = gap.get("intents", ["informational"])
     incumbents = gap.get("incumbents", [])
     incumbent_classes = gap.get("incumbent_classes", [])
@@ -82,7 +81,7 @@ def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, st
 
     slug = _slug(keyword)
     title = f"{keyword.title()} — {page_brief['name']}"
-    desc  = page_brief.get("positioning", "")
+    desc = page_brief.get("positioning", "")
 
     body = [
         f"# {page_brief['name']}: {keyword.title()}",
@@ -106,7 +105,12 @@ def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, st
     if paa:
         body += ["## Questions buyers actually ask", ""]
         for q, a in paa:
-            body += [f"### {q}", "", a or "_Answer drafted from product brief — review before publish._", ""]
+            body += [
+                f"### {q}",
+                "",
+                a or "_Answer drafted from product brief — review before publish._",
+                "",
+            ]
 
     # Cross-vertical contextual link block. Bleeds authority between the
     # MasterSheets silo and the IRL/x402 silo so backlinks to either lift both.
@@ -118,12 +122,14 @@ def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, st
     body += [_cta_for_intent(intents, page_brief), ""]
 
     if incumbents:
-        landscape = ["<!-- COMPETITIVE LANDSCAPE — operator review only",
-                     f"  keyword:  {keyword}",
-                     f"  severity: {gap.get('severity', '?')}",
-                     f"  priority: {gap.get('priority', '?')}",
-                     "  top3:"]
-        for cls, sig in zip(incumbent_classes + ["?"] * 3, incumbents):
+        landscape = [
+            "<!-- COMPETITIVE LANDSCAPE — operator review only",
+            f"  keyword:  {keyword}",
+            f"  severity: {gap.get('severity', '?')}",
+            f"  priority: {gap.get('priority', '?')}",
+            "  top3:",
+        ]
+        for cls, sig in zip(incumbent_classes + ["?"] * 3, incumbents, strict=False):
             landscape.append(f"    [{cls}] {sig.get('title', '')} — {sig.get('link', '')}")
         if angles:
             landscape.append("  attack_angles:")
@@ -132,43 +138,46 @@ def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, st
         landscape.append("-->")
         body += landscape
 
-    frontmatter = "\n".join([
-        "---",
-        f"title: \"{title}\"",
-        f"description: \"{desc}\"",
-        f"keyword: \"{keyword}\"",
-        f"intent_silo: \"{intent_silo}\"",
-        f"vertical: \"{page_brief.get('_vertical', 'unknown')}\"",
-        f"intents: {json.dumps(intents)}",
-        f"gap_severity: \"{gap.get('severity', 'UNKNOWN')}\"",
-        f"priority_score: {gap.get('priority', 0)}",
-        f"brand_positions: {json.dumps(gap.get('brand_positions', []))}",
-        f"attack_angle_codes: {json.dumps([a.get('code') for a in angles])}",
-        f"generated_at: {int(time.time())}",
-        "needs_human_review: true",
-        "---",
-        "",
-    ])
+    frontmatter = "\n".join(
+        [
+            "---",
+            f'title: "{title}"',
+            f'description: "{desc}"',
+            f'keyword: "{keyword}"',
+            f'intent_silo: "{intent_silo}"',
+            f'vertical: "{page_brief.get("_vertical", "unknown")}"',
+            f"intents: {json.dumps(intents)}",
+            f'gap_severity: "{gap.get("severity", "UNKNOWN")}"',
+            f"priority_score: {gap.get('priority', 0)}",
+            f"brand_positions: {json.dumps(gap.get('brand_positions', []))}",
+            f"attack_angle_codes: {json.dumps([a.get('code') for a in angles])}",
+            f"generated_at: {int(time.time())}",
+            "needs_human_review: true",
+            "---",
+            "",
+        ]
+    )
     return slug, frontmatter + "\n".join(body)
 
 
 # ── JSON-LD factory — vertical-keyed schema types ─────────────────────────────
 
+
 def _product_block(page_brief: dict, url: str) -> dict:
     block = {
-        "@context":    "https://schema.org",
-        "@type":       "Product",
-        "name":        page_brief["name"],
-        "url":         url,
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": page_brief["name"],
+        "url": url,
         "description": page_brief.get("positioning", ""),
-        "brand":       {"@type": "Brand", "name": "ScriptMasterLabs"},
+        "brand": {"@type": "Brand", "name": "ScriptMasterLabs"},
     }
     if page_brief.get("pricing", {}).get("model") == "one_time":
         block["offers"] = {
-            "@type":         "Offer",
+            "@type": "Offer",
             "priceCurrency": "USD",
-            "availability":  "https://schema.org/InStock",
-            "category":      "one-time payment",
+            "availability": "https://schema.org/InStock",
+            "category": "one-time payment",
         }
     return block
 
@@ -176,14 +185,14 @@ def _product_block(page_brief: dict, url: str) -> dict:
 def _softwareapp_mastersheets(page_brief: dict, url: str) -> dict:
     """Direct play at Google Sheets organic territory."""
     return {
-        "@context":           "https://schema.org",
-        "@type":              "SoftwareApplication",
-        "name":               page_brief["name"],
-        "url":                url,
-        "description":        page_brief.get("positioning", ""),
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": page_brief["name"],
+        "url": url,
+        "description": page_brief.get("positioning", ""),
         "applicationCategory": "BusinessApplication",
         "applicationSubCategory": "Spreadsheet",
-        "operatingSystem":    "Windows, macOS, Linux",
+        "operatingSystem": "Windows, macOS, Linux",
         "featureList": [
             "100% one-time payment — zero subscriptions",
             "Bring Your Own Key (BYOK) AI integration",
@@ -191,10 +200,10 @@ def _softwareapp_mastersheets(page_brief: dict, url: str) -> dict:
             "Drop-in superset of Google Sheets formulas",
         ],
         "offers": {
-            "@type":         "Offer",
+            "@type": "Offer",
             "priceCurrency": "USD",
-            "availability":  "https://schema.org/InStock",
-            "category":      "one-time payment",
+            "availability": "https://schema.org/InStock",
+            "category": "one-time payment",
         },
         "publisher": {"@type": "Organization", "name": "ScriptMasterLabs"},
     }
@@ -203,13 +212,13 @@ def _softwareapp_mastersheets(page_brief: dict, url: str) -> dict:
 def _organization_xrpl(url: str) -> dict:
     """Establish SML as the authority on M2M payment infrastructure."""
     return {
-        "@context":    "https://schema.org",
-        "@type":       "Organization",
-        "name":        "ScriptMasterLabs",
-        "url":         "https://www.scriptmasterlabs.com",
-        "logo":        "https://www.scriptmasterlabs.com/logo.png",
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "ScriptMasterLabs",
+        "url": "https://www.scriptmasterlabs.com",
+        "logo": "https://www.scriptmasterlabs.com/logo.png",
         "description": "Operator of SML Institutional Rails (IRL), the x402 paywall, Ghost Layer, and 402Proof.",
-        "sameAs":      SAMEAS_XRPL_X402,
+        "sameAs": SAMEAS_XRPL_X402,
         "knowsAbout": [
             "HTTP 402 Payment Required",
             "x402 wire protocol",
@@ -224,29 +233,35 @@ def _organization_xrpl(url: str) -> dict:
 def _techarticle_xrpl(page_brief: dict, url: str, keyword: str) -> dict:
     """Authoritative technical doc framing for IRL/x402 pages."""
     return {
-        "@context":      "https://schema.org",
-        "@type":         "TechArticle",
-        "headline":      f"{keyword.title()} — {page_brief['name']}",
-        "url":           url,
-        "description":   page_brief.get("positioning", ""),
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": f"{keyword.title()} — {page_brief['name']}",
+        "url": url,
+        "description": page_brief.get("positioning", ""),
         "proficiencyLevel": "Expert",
-        "dependencies":  "XRPL, Xahau, HTTP 402, x402 wire protocol",
-        "author":        {"@type": "Organization", "name": "ScriptMasterLabs"},
-        "publisher":     {"@type": "Organization", "name": "ScriptMasterLabs",
-                          "sameAs": SAMEAS_XRPL_X402},
-        "keywords":      [keyword, "x402", "XRPL", "Xahau", "M2M payments", "AI agent economy"],
+        "dependencies": "XRPL, Xahau, HTTP 402, x402 wire protocol",
+        "author": {"@type": "Organization", "name": "ScriptMasterLabs"},
+        "publisher": {
+            "@type": "Organization",
+            "name": "ScriptMasterLabs",
+            "sameAs": SAMEAS_XRPL_X402,
+        },
+        "keywords": [keyword, "x402", "XRPL", "Xahau", "M2M payments", "AI agent economy"],
     }
 
 
 def _faqpage(paa: list) -> dict:
     return {
-        "@context":   "https://schema.org",
-        "@type":      "FAQPage",
-        "mainEntity": [{
-            "@type":          "Question",
-            "name":           q,
-            "acceptedAnswer": {"@type": "Answer", "text": a or ""},
-        } for q, a in paa],
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": q,
+                "acceptedAnswer": {"@type": "Answer", "text": a or ""},
+            }
+            for q, a in paa
+        ],
     }
 
 
@@ -271,8 +286,8 @@ def build_jsonld(page_brief: dict, keyword: str) -> list[dict]:
 
 def write_page(out_dir: str, page_brief: dict, intent_silo: str, keyword: str) -> str:
     slug, mdx = build_mdx(page_brief, keyword, intent_silo)
-    schema    = build_jsonld(page_brief, keyword)
-    page_dir  = os.path.join(out_dir, slug)
+    schema = build_jsonld(page_brief, keyword)
+    page_dir = os.path.join(out_dir, slug)
     os.makedirs(page_dir, exist_ok=True)
     with open(os.path.join(page_dir, "page.mdx"), "w") as f:
         f.write(mdx)

@@ -8,6 +8,7 @@ fabricating data.
 
 import os
 import time
+
 import requests
 
 
@@ -34,10 +35,10 @@ class SerperClient:
         if r.status_code != 200:
             raise SerperError(f"serper {r.status_code}: {r.text[:200]}")
         return {
-            "query":         query,
-            "fetched_at":    time.time(),
-            "organic":       r.json().get("organic", []),
+            "query": query,
+            "fetched_at": time.time(),
+            "organic": r.json().get("organic", []),
             "people_also_ask": r.json().get("peopleAlsoAsk", []),
-            "related":       r.json().get("relatedSearches", []),
-            "raw":           r.json(),
+            "related": r.json().get("relatedSearches", []),
+            "raw": r.json(),
         }

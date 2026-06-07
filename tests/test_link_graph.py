@@ -10,14 +10,15 @@ import shutil
 import tempfile
 import unittest
 
-from sml_beast.content.link_graph import render_cross_link_block, all_outbound_targets
+from sml_beast.content.link_graph import all_outbound_targets, render_cross_link_block
 from sml_beast.intel.backlink_targets import BacklinkTargetFinder
-
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def r(title, link, snippet=""):
     return {"title": title, "link": link, "snippet": snippet}
+
 
 def serp(organic):
     return {"organic": organic}
@@ -25,8 +26,8 @@ def serp(organic):
 
 # ── link graph ────────────────────────────────────────────────────────────────
 
-class LinkGraphTests(unittest.TestCase):
 
+class LinkGraphTests(unittest.TestCase):
     def test_mastersheets_block_renders_with_x402_anchor(self):
         block = render_cross_link_block("mastersheets")
         self.assertTrue(block, "mastersheets vertical must produce a block")
@@ -70,11 +71,17 @@ class LinkGraphTests(unittest.TestCase):
         from sml_beast.content.generator import write_page
         from sml_beast.intel.serp_gap import analyze, synthesize_page_brief
 
-        rep = analyze({
-            "organic": [r("Capterra roundup", "https://capterra.com/x"),
-                        r("G2 listicle",     "https://g2.com/y"),
-                        r("Random review",   "https://example.com/z")]
-        }, brand_domains=("scriptmasterlabs.com",), vertical="mastersheets")
+        rep = analyze(
+            {
+                "organic": [
+                    r("Capterra roundup", "https://capterra.com/x"),
+                    r("G2 listicle", "https://g2.com/y"),
+                    r("Random review", "https://example.com/z"),
+                ]
+            },
+            brand_domains=("scriptmasterlabs.com",),
+            vertical="mastersheets",
+        )
         page_brief = synthesize_page_brief(MASTERSHEETS, rep, vertical="mastersheets")
 
         tmp = tempfile.mkdtemp(prefix="beast-link-")
@@ -90,8 +97,8 @@ class LinkGraphTests(unittest.TestCase):
 
 # ── backlink-target finder ────────────────────────────────────────────────────
 
-class BacklinkFinderTests(unittest.TestCase):
 
+class BacklinkFinderTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="beast-bounty-")
         self.finder = BacklinkTargetFinder(brand_domains=("scriptmasterlabs.com",))
@@ -100,40 +107,55 @@ class BacklinkFinderTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_filters_brand_megasites_entrenched_forums(self):
-        self.finder.ingest(serp([
-            r("Capterra: top spreadsheets",  "https://capterra.com/spreadsheets/"),
-            r("My own page",                 "https://www.scriptmasterlabs.com/mastersheets"),
-            r("Wikipedia: spreadsheet",      "https://en.wikipedia.org/wiki/Spreadsheet"),
-            r("Reddit r/spreadsheets",       "https://reddit.com/r/spreadsheets"),
-            r("YouTube tutorial",            "https://youtube.com/watch?v=abc"),
-            r("Niche SaaS review",           "https://saasblog.example.com/spreadsheet-review"),
-        ]), keyword="google sheets alternative")
+        self.finder.ingest(
+            serp(
+                [
+                    r("Capterra: top spreadsheets", "https://capterra.com/spreadsheets/"),
+                    r("My own page", "https://www.scriptmasterlabs.com/mastersheets"),
+                    r("Wikipedia: spreadsheet", "https://en.wikipedia.org/wiki/Spreadsheet"),
+                    r("Reddit r/spreadsheets", "https://reddit.com/r/spreadsheets"),
+                    r("YouTube tutorial", "https://youtube.com/watch?v=abc"),
+                    r("Niche SaaS review", "https://saasblog.example.com/spreadsheet-review"),
+                ]
+            ),
+            keyword="google sheets alternative",
+        )
 
         domains = {t["domain"] for t in self.finder.ranked()}
         # only aggregator + neutral survive
-        self.assertIn("capterra.com",            domains)
-        self.assertIn("saasblog.example.com",    domains)
+        self.assertIn("capterra.com", domains)
+        self.assertIn("saasblog.example.com", domains)
         # brand
         self.assertNotIn("scriptmasterlabs.com", domains)
         # entrenched
-        self.assertNotIn("en.wikipedia.org",     domains)
-        self.assertNotIn("wikipedia.org",        domains)
+        self.assertNotIn("en.wikipedia.org", domains)
+        self.assertNotIn("wikipedia.org", domains)
         # forum
-        self.assertNotIn("reddit.com",           domains)
+        self.assertNotIn("reddit.com", domains)
         # megasite
-        self.assertNotIn("youtube.com",          domains)
+        self.assertNotIn("youtube.com", domains)
 
     def test_scoring_priorities_aggregator_over_neutral(self):
         # capterra appears 2x (aggregator, weight 4), saasblog appears 3x
         # (neutral, weight 2). capterra: 2*4=8, saasblog: 3*2=6 -> capterra wins.
         for kw in ("kw1", "kw2"):
-            self.finder.ingest(serp([
-                r("Capterra A", "https://capterra.com/a"),
-                r("SaaS Blog",  "https://saasblog.example.com/a"),
-            ]), keyword=kw)
-        self.finder.ingest(serp([
-            r("SaaS Blog 2", "https://saasblog.example.com/b"),
-        ]), keyword="kw3")
+            self.finder.ingest(
+                serp(
+                    [
+                        r("Capterra A", "https://capterra.com/a"),
+                        r("SaaS Blog", "https://saasblog.example.com/a"),
+                    ]
+                ),
+                keyword=kw,
+            )
+        self.finder.ingest(
+            serp(
+                [
+                    r("SaaS Blog 2", "https://saasblog.example.com/b"),
+                ]
+            ),
+            keyword="kw3",
+        )
 
         ranked = self.finder.ranked()
         domains_in_order = [t["domain"] for t in ranked]
@@ -145,9 +167,14 @@ class BacklinkFinderTests(unittest.TestCase):
         self.assertEqual(capterra["priority_score"], 8)
 
     def test_listicle_classified_when_title_matches(self):
-        self.finder.ingest(serp([
-            r("10 best spreadsheet alternatives in 2025", "https://techblog.example.com/x"),
-        ]), keyword="alternatives")
+        self.finder.ingest(
+            serp(
+                [
+                    r("10 best spreadsheet alternatives in 2025", "https://techblog.example.com/x"),
+                ]
+            ),
+            keyword="alternatives",
+        )
         ranked = self.finder.ranked()
         self.assertEqual(ranked[0]["class"], "listicle")
         self.assertEqual(ranked[0]["class_weight"], 3)
@@ -155,9 +182,14 @@ class BacklinkFinderTests(unittest.TestCase):
     def test_discovered_via_dedupes_and_caps(self):
         # 6 distinct keywords -> SAMPLE_CAP (5) entries kept; duplicates ignored.
         for kw in ("a", "b", "c", "d", "e", "f", "a"):
-            self.finder.ingest(serp([
-                r("Capterra", "https://capterra.com/x"),
-            ]), keyword=kw)
+            self.finder.ingest(
+                serp(
+                    [
+                        r("Capterra", "https://capterra.com/x"),
+                    ]
+                ),
+                keyword=kw,
+            )
         ranked = self.finder.ranked()
         self.assertEqual(ranked[0]["domain"], "capterra.com")
         self.assertLessEqual(len(ranked[0]["discovered_via"]), 5)
@@ -165,10 +197,15 @@ class BacklinkFinderTests(unittest.TestCase):
         self.assertEqual(ranked[0]["frequency"], 7)
 
     def test_flush_writes_json_and_is_idempotent(self):
-        self.finder.ingest(serp([
-            r("Capterra", "https://capterra.com/x"),
-            r("G2",       "https://g2.com/y"),
-        ]), keyword="alts")
+        self.finder.ingest(
+            serp(
+                [
+                    r("Capterra", "https://capterra.com/x"),
+                    r("G2", "https://g2.com/y"),
+                ]
+            ),
+            keyword="alts",
+        )
         path1 = self.finder.flush("mastersheets", self.tmp)
         path2 = self.finder.flush("mastersheets", self.tmp)  # second flush, same data
         self.assertEqual(path1, path2)
@@ -184,10 +221,15 @@ class BacklinkFinderTests(unittest.TestCase):
     def test_ranked_output_is_stable_for_ties(self):
         # Two domains with identical class + frequency -> alphabetical tiebreak
         for _ in range(2):
-            self.finder.ingest(serp([
-                r("Capterra", "https://capterra.com/x"),
-                r("G2",       "https://g2.com/y"),
-            ]), keyword="alts")
+            self.finder.ingest(
+                serp(
+                    [
+                        r("Capterra", "https://capterra.com/x"),
+                        r("G2", "https://g2.com/y"),
+                    ]
+                ),
+                keyword="alts",
+            )
         ranked = self.finder.ranked()
         self.assertEqual(ranked[0]["domain"], "capterra.com")
         self.assertEqual(ranked[1]["domain"], "g2.com")

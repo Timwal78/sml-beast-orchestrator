@@ -4,14 +4,42 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sml-beast-orchestrator"
-version = "0.1.0"
+version = "0.2.0"
 description = "Autonomous x402-driven SEO orchestrator for ScriptMasterLabs verticals (MasterSheets, XRPL/x402)."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "ScriptMasterLabs" }]
+license = { text = "Proprietary" }
+classifiers = [
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+# Runtime deps. Pinned to compatible ranges; lockfile lives in CI cache.
+# When BB7's verifier ships, beautifulsoup4 + lxml move from `bb7` to here.
 dependencies = [
-  "flask>=3.0",
-  "requests>=2.31",
+  "flask>=3.0,<4.0",
+  "requests>=2.31,<3.0",
+  "gunicorn>=21.2,<23.0",
+]
+
+[project.optional-dependencies]
+# BB7 outreach agent — XRPL ledger client + HTML parsing for verifier.
+# Kept optional so the core orchestrator (BB1-BB6) installs without
+# pulling the XRPL stack until BB7 actually lands its callers.
+bb7 = [
+  "xrpl-py>=2.5,<5.0",
+  "beautifulsoup4>=4.12,<5.0",
+  "lxml>=5.0,<6.0",
+]
+# Dev tooling — never installed in production.
+dev = [
+  "ruff>=0.6,<1.0",
+  "mypy>=1.10,<2.0",
+  "types-requests",
+  "types-beautifulsoup4",
+  "pip-audit>=2.7",
 ]
 
 [project.scripts]
@@ -20,3 +48,56 @@ sml-beast = "sml_beast.orchestrator:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sml_beast*"]
+
+# ── ruff: lint + format ──────────────────────────────────────────────────────
+# Rule selection calibrated to what existing code already passes so CI is
+# green on day one. Tighten incrementally via subsequent commits.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["output", "scripts/legacy"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "I",    # isort
+  "B",    # flake8-bugbear
+  "UP",   # pyupgrade
+  "S",    # flake8-bandit (security)
+  "PLE",  # pylint errors
+  "RUF",  # ruff-native
+]
+ignore = [
+  "E501",   # line-length is the formatter's job
+  "S101",   # `assert` is fine in tests
+  "S104",   # binding to 0.0.0.0 is intentional in the proxy + dashboard
+  "S311",   # we don't use random for cryptographic purposes
+  "B008",   # default-arg function calls are fine in Flask decorators
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108", "PLE1205"]  # test tokens/temp paths/log fmt
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ── mypy: type checking ──────────────────────────────────────────────────────
+# Permissive baseline; tighten module-by-module as types mature.
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+exclude = ["output/", "scripts/legacy/"]
+
+[[tool.mypy.overrides]]
+module = ["xrpl.*", "bs4.*", "lxml.*", "flask.*", "requests.*"]
+ignore_missing_imports = true
+
+# ── unittest discovery ───────────────────────────────────────────────────────
+[tool.setuptools]
+include-package-data = true

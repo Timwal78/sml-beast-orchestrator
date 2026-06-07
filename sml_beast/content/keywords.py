@@ -5,25 +5,25 @@ chosen because it maps to a real intent the product directly serves.
 """
 
 MASTERSHEETS_SILOS = {
-    "alternative":     [
+    "alternative": [
         "google sheets alternative",
         "best google sheets alternative",
         "spreadsheet software no subscription",
         "one-time payment spreadsheet",
     ],
-    "sovereignty":     [
+    "sovereignty": [
         "private data spreadsheet",
         "self-hosted spreadsheet",
         "offline spreadsheet ai",
         "spreadsheet data ownership",
     ],
-    "ai_byok":         [
+    "ai_byok": [
         "byok ai spreadsheet",
         "bring your own key spreadsheet",
         "spreadsheet llm integration",
         "openai key in spreadsheet",
     ],
-    "visual_debt":     [
+    "visual_debt": [
         "visual debt reduction algorithm",
         "spreadsheet readability tool",
         "auto-formatting spreadsheet ai",
@@ -31,25 +31,25 @@ MASTERSHEETS_SILOS = {
 }
 
 XRPL_X402_SILOS = {
-    "protocol":        [
+    "protocol": [
         "x402 payment protocol",
         "http 402 payment required",
         "x402 facilitator",
         "x402 wire protocol",
     ],
-    "agent_economy":   [
+    "agent_economy": [
         "ai agent payment infrastructure",
         "ai agent settlement layer",
         "m2m stablecoin api",
         "machine-to-machine payments",
     ],
-    "xrpl_rail":       [
+    "xrpl_rail": [
         "xrpl mcp paywall",
         "rlusd agent payments",
         "sub-50ms crypto receipts",
         "xrpl micropayments api",
     ],
-    "mcp":             [
+    "mcp": [
         "mcp paid tool",
         "model context protocol payment",
         "claude mcp x402",

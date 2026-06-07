@@ -42,12 +42,13 @@ import hmac
 import json
 import logging
 import os
-from flask import Flask, abort, jsonify, request, Response
+
+from flask import Flask, Response, abort, jsonify, request
 
 logger = logging.getLogger("sml-beast.dashboard")
 
 
-VERTICALS = ("mastersheets", "xrpl")   # output dir names, not worker.vertical keys
+VERTICALS = ("mastersheets", "xrpl")  # output dir names, not worker.vertical keys
 
 
 def _safe_vertical(v: str) -> str:
@@ -74,11 +75,13 @@ def _list_pages(output_root: str, vertical: str) -> list[dict]:
         mdx = os.path.join(page_dir, "page.mdx")
         if os.path.isfile(mdx):
             stat = os.stat(mdx)
-            out.append({
-                "slug":       entry,
-                "mtime":      int(stat.st_mtime),
-                "size_bytes": stat.st_size,
-            })
+            out.append(
+                {
+                    "slug": entry,
+                    "mtime": int(stat.st_mtime),
+                    "size_bytes": stat.st_size,
+                }
+            )
     out.sort(key=lambda p: -p["mtime"])
     return out
 
@@ -103,7 +106,9 @@ def _make_auth_decorator(token: str, allow_query_param_on_html: bool = False):
             if not provided or not hmac.compare_digest(provided, token):
                 abort(401)
             return f(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -125,10 +130,11 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
         logger.warning(
             "DASHBOARD_AUTH_TOKEN unset — dashboard routes will NOT be "
             "registered. Set this env var to a cryptographically-random "
-            "value (e.g. `openssl rand -hex 32`) to enable the dashboard.")
+            "value (e.g. `openssl rand -hex 32`) to enable the dashboard."
+        )
         return
 
-    require_api_auth  = _make_auth_decorator(token, allow_query_param_on_html=False)
+    require_api_auth = _make_auth_decorator(token, allow_query_param_on_html=False)
     require_html_auth = _make_auth_decorator(token, allow_query_param_on_html=True)
 
     ledger_lock, ledger = ledger_ref
@@ -138,10 +144,12 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
     def state():
         with ledger_lock:
             wallets = [
-                {"wallet":    w,
-                 "calls":     e["calls"],
-                 "paid_usdc": round(e["paid_usdc"], 6),
-                 "last_ts":   int(e["last_ts"]) if e["last_ts"] else 0}
+                {
+                    "wallet": w,
+                    "calls": e["calls"],
+                    "paid_usdc": round(e["paid_usdc"], 6),
+                    "last_ts": int(e["last_ts"]) if e["last_ts"] else 0,
+                }
                 for w, e in sorted(ledger.items())
             ]
             total_calls = sum(e["calls"] for e in ledger.values())
@@ -149,20 +157,24 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
         verticals = []
         for v in VERTICALS:
             bounty = _read_bounty(output_root, v)
-            pages  = _list_pages(output_root, v)
-            verticals.append({
-                "vertical":             v,
-                "bounty_domains":       bounty.get("total_domains", 0),
-                "serps_ingested":       bounty.get("total_serps_ingested", 0),
-                "pages_generated":      len(pages),
-                "latest_page_mtime":    pages[0]["mtime"] if pages else 0,
-            })
+            pages = _list_pages(output_root, v)
+            verticals.append(
+                {
+                    "vertical": v,
+                    "bounty_domains": bounty.get("total_domains", 0),
+                    "serps_ingested": bounty.get("total_serps_ingested", 0),
+                    "pages_generated": len(pages),
+                    "latest_page_mtime": pages[0]["mtime"] if pages else 0,
+                }
+            )
 
-        return jsonify({
-            "proxy":       {"total_calls": total_calls, "wallets": wallets},
-            "verticals":   verticals,
-            "output_root": output_root,
-        })
+        return jsonify(
+            {
+                "proxy": {"total_calls": total_calls, "wallets": wallets},
+                "verticals": verticals,
+                "output_root": output_root,
+            }
+        )
 
     @app.route("/api/dashboard/bounty/<vertical>", methods=["GET"])
     @require_api_auth

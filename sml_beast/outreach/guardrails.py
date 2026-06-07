@@ -38,7 +38,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger("sml-beast.outreach.guardrails")
@@ -48,16 +48,16 @@ logger = logging.getLogger("sml-beast.outreach.guardrails")
 # HARDCODED BEASTMODE LIMITS — per BB7_DESIGN.md §6
 # Raising these requires a physical code edit and a fresh deploy.
 # ==========================================
-OUTREACH_DAILY_CEILING_USDC     =  20.00
-OUTREACH_HOT_WALLET_MAX_USDC    = 100.00
-OUTREACH_MAX_AUTONOMY_FEE_USDC  =  10.00
-OUTREACH_STANDARD_FEE_USDC      =   5.00
-OUTREACH_PREMIUM_FEE_USDC       =  10.00
+OUTREACH_DAILY_CEILING_USDC = 20.00
+OUTREACH_HOT_WALLET_MAX_USDC = 100.00
+OUTREACH_MAX_AUTONOMY_FEE_USDC = 10.00
+OUTREACH_STANDARD_FEE_USDC = 5.00
+OUTREACH_PREMIUM_FEE_USDC = 10.00
 
-OUTREACH_DOMAIN_COOLDOWN_DAYS    = 14
-OUTREACH_DAILY_PITCH_CAP_WARMUP  =  3
-OUTREACH_DAILY_PITCH_CAP_STEADY  = 10
-OUTREACH_WARMUP_DAYS             = 30
+OUTREACH_DOMAIN_COOLDOWN_DAYS = 14
+OUTREACH_DAILY_PITCH_CAP_WARMUP = 3
+OUTREACH_DAILY_PITCH_CAP_STEADY = 10
+OUTREACH_WARMUP_DAYS = 30
 
 HARD_BLOCKLIST_TLDS = (".gov", ".mil", ".edu")
 
@@ -72,14 +72,25 @@ def _output_root() -> Path:
     return Path(__file__).resolve().parents[2] / "output"
 
 
-def kill_switch_path() -> Path: return _output_root() / "OUTREACH_KILL_SWITCH"
-def state_dir() -> Path:        return _output_root() / "outreach"
-def ledger_path() -> Path:      return state_dir() / "daily_ledger.json"
-def blocklist_path() -> Path:   return state_dir() / "outreach_hard_blocklist.txt"
+def kill_switch_path() -> Path:
+    return _output_root() / "OUTREACH_KILL_SWITCH"
+
+
+def state_dir() -> Path:
+    return _output_root() / "outreach"
+
+
+def ledger_path() -> Path:
+    return state_dir() / "daily_ledger.json"
+
+
+def blocklist_path() -> Path:
+    return state_dir() / "outreach_hard_blocklist.txt"
 
 
 class SystemHaltedException(Exception):
     """Raised when the kill switch is engaged. Propagates to abort the loop."""
+
     pass
 
 
@@ -91,7 +102,6 @@ _ledger_lock = threading.Lock()
 
 
 class OutreachGuardrails:
-
     # ── kill switch ──────────────────────────────────────────────────────────
 
     @classmethod
@@ -100,8 +110,9 @@ class OutreachGuardrails:
         Operator drops the file (any content) to abort all new outbound
         without a redeploy. In-flight escrows continue to settle/refund."""
         if kill_switch_path().exists():
-            logger.critical("KILL SWITCH ENGAGED: %s detected. Halting all outbound.",
-                            kill_switch_path())
+            logger.critical(
+                "KILL SWITCH ENGAGED: %s detected. Halting all outbound.", kill_switch_path()
+            )
             raise SystemHaltedException("Kill switch active.")
 
     # ── target validation ────────────────────────────────────────────────────
@@ -118,9 +129,10 @@ class OutreachGuardrails:
             return False
         bp = blocklist_path()
         if bp.exists():
-            with open(bp, "r") as f:
-                blocked = {line.strip().lower() for line in f
-                           if line.strip() and not line.startswith("#")}
+            with open(bp) as f:
+                blocked = {
+                    line.strip().lower() for line in f if line.strip() and not line.startswith("#")
+                }
             if domain_lower in blocked:
                 logger.warning("TARGET REJECTED: %s in custom hard blocklist", domain)
                 return False
@@ -130,7 +142,7 @@ class OutreachGuardrails:
 
     @classmethod
     def _today(cls) -> str:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return datetime.now(UTC).strftime("%Y-%m-%d")
 
     @classmethod
     def _get_daily_ledger(cls) -> dict:
@@ -144,7 +156,7 @@ class OutreachGuardrails:
             lp.parent.mkdir(parents=True, exist_ok=True)
             return {"date": today, "spent_usdc": 0.0, "pitches_sent": 0}
         try:
-            with open(lp, "r") as f:
+            with open(lp) as f:
                 ledger = json.load(f)
         except (json.JSONDecodeError, OSError):
             ledger = {}
@@ -174,15 +186,21 @@ class OutreachGuardrails:
             logger.error("AUTH DENIED: non-positive fee %s", requested_fee)
             return False
         if requested_fee > OUTREACH_MAX_AUTONOMY_FEE_USDC:
-            logger.error("AUTH DENIED: fee %.2f exceeds agent autonomy cap %.2f",
-                         requested_fee, OUTREACH_MAX_AUTONOMY_FEE_USDC)
+            logger.error(
+                "AUTH DENIED: fee %.2f exceeds agent autonomy cap %.2f",
+                requested_fee,
+                OUTREACH_MAX_AUTONOMY_FEE_USDC,
+            )
             return False
         with _ledger_lock:
             ledger = cls._get_daily_ledger()
             projected = ledger["spent_usdc"] + requested_fee
         if projected > OUTREACH_DAILY_CEILING_USDC + 1e-9:
-            logger.error("AUTH DENIED: projected %.2f exceeds daily ceiling %.2f",
-                         projected, OUTREACH_DAILY_CEILING_USDC)
+            logger.error(
+                "AUTH DENIED: projected %.2f exceeds daily ceiling %.2f",
+                projected,
+                OUTREACH_DAILY_CEILING_USDC,
+            )
             return False
         return True
 
@@ -192,13 +210,13 @@ class OutreachGuardrails:
         Caller supplies is_warmup_period — state.py computes it from the
         first-pitch timestamp; guardrails does not track that itself."""
         cls.enforce_kill_switch()
-        cap = OUTREACH_DAILY_PITCH_CAP_WARMUP if is_warmup_period \
-            else OUTREACH_DAILY_PITCH_CAP_STEADY
+        cap = (
+            OUTREACH_DAILY_PITCH_CAP_WARMUP if is_warmup_period else OUTREACH_DAILY_PITCH_CAP_STEADY
+        )
         with _ledger_lock:
             ledger = cls._get_daily_ledger()
         if ledger["pitches_sent"] >= cap:
-            logger.warning("RATE LIMIT: pitch cap %d/%d reached",
-                           ledger["pitches_sent"], cap)
+            logger.warning("RATE LIMIT: pitch cap %d/%d reached", ledger["pitches_sent"], cap)
             return False
         return True
 
@@ -212,9 +230,13 @@ class OutreachGuardrails:
             ledger["spent_usdc"] = round(ledger["spent_usdc"] + fee_spent, 6)
             ledger["pitches_sent"] += 1
             cls._save_daily_ledger(ledger)
-        logger.info("LEDGER UPDATED: spent %.2f USDC. Today: %.2f/%.2f, pitches %d",
-                    fee_spent, ledger["spent_usdc"], OUTREACH_DAILY_CEILING_USDC,
-                    ledger["pitches_sent"])
+        logger.info(
+            "LEDGER UPDATED: spent %.2f USDC. Today: %.2f/%.2f, pitches %d",
+            fee_spent,
+            ledger["spent_usdc"],
+            OUTREACH_DAILY_CEILING_USDC,
+            ledger["pitches_sent"],
+        )
 
     # ── observability ────────────────────────────────────────────────────────
 

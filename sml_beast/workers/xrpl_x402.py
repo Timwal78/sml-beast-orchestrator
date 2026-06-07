@@ -6,10 +6,10 @@ loop as the MasterSheets worker — gap analysis happens in the base class;
 this subclass just renders the gap-overlaid page brief.
 """
 
-from sml_beast.content.briefs    import XRPL_X402
-from sml_beast.content.keywords  import XRPL_X402_SILOS
+from sml_beast.content.briefs import XRPL_X402
 from sml_beast.content.generator import write_page
-from sml_beast.workers.base      import Worker
+from sml_beast.content.keywords import XRPL_X402_SILOS
+from sml_beast.workers.base import Worker
 
 
 class XrplX402Worker(Worker):

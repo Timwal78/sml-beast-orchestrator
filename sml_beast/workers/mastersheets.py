@@ -6,10 +6,10 @@ The base Worker handles the SERP fetch and gap analysis; this subclass
 just turns a gap-overlaid page brief into a disk artifact.
 """
 
-from sml_beast.content.briefs    import MASTERSHEETS
-from sml_beast.content.keywords  import MASTERSHEETS_SILOS
+from sml_beast.content.briefs import MASTERSHEETS
 from sml_beast.content.generator import write_page
-from sml_beast.workers.base      import Worker
+from sml_beast.content.keywords import MASTERSHEETS_SILOS
+from sml_beast.workers.base import Worker
 
 
 class MasterSheetsWorker(Worker):

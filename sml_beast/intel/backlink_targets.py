@@ -12,7 +12,7 @@ Filtering:
   - entrenched authority (wikipedia / google / microsoft — not acquirable)
 
 Scoring:
-  priority_score = frequency × class_weight
+  priority_score = frequency * class_weight
   class weights:
     aggregator   = 4   # capterra / g2 / alternativeto — directories, top placement value
     listicle     = 3   # "10 best X" — replacement targets, high authority transfer
@@ -39,33 +39,48 @@ import json
 import os
 import time
 from collections import defaultdict
-from typing import Iterable
+from collections.abc import Iterable
 from urllib.parse import urlparse
 
 from .serp_gap import (
-    AGGREGATOR_DOMAINS, ENTRENCHED_DOMAINS, FORUM_HOSTS, LISTICLE_RX,
+    AGGREGATOR_DOMAINS,
+    ENTRENCHED_DOMAINS,
+    FORUM_HOSTS,
+    LISTICLE_RX,
 )
-
 
 # Social platforms + marketplaces + Q&A sites that won't realistically accept
 # institutional backlink placement. Entrenched + forums are already filtered
 # via the imported sets — this list is the additional exclusion layer.
-MEGA_SITES: frozenset[str] = frozenset({
-    "youtube.com", "facebook.com", "twitter.com", "x.com",
-    "instagram.com", "tiktok.com", "pinterest.com", "snapchat.com",
-    "amazon.com", "amazon.co.uk", "amazon.de", "ebay.com", "etsy.com",
-    "yelp.com", "tripadvisor.com",
-})
+MEGA_SITES: frozenset[str] = frozenset(
+    {
+        "youtube.com",
+        "facebook.com",
+        "twitter.com",
+        "x.com",
+        "instagram.com",
+        "tiktok.com",
+        "pinterest.com",
+        "snapchat.com",
+        "amazon.com",
+        "amazon.co.uk",
+        "amazon.de",
+        "ebay.com",
+        "etsy.com",
+        "yelp.com",
+        "tripadvisor.com",
+    }
+)
 
 CLASS_WEIGHT: dict[str, int] = {
     "aggregator": 4,
-    "listicle":   3,
-    "neutral":    2,
+    "listicle": 3,
+    "neutral": 2,
     "entrenched": 0,
-    "forum":      0,
+    "forum": 0,
 }
 
-SAMPLE_CAP = 5   # per-domain memory budget for titles/urls/keywords
+SAMPLE_CAP = 5  # per-domain memory budget for titles/urls/keywords
 
 
 def _host(url: str) -> str:
@@ -87,7 +102,7 @@ def _classify(result: dict) -> str:
     """Classifier for backlink purposes. Aligned with serp_gap._classify but
     not identical — here we collapse 'entrenched' and 'forum' to filter classes
     and treat listicle titles on non-aggregator hosts as their own bucket."""
-    host  = _host(result.get("link", ""))
+    host = _host(result.get("link", ""))
     title = result.get("title", "")
     if _matches(host, ENTRENCHED_DOMAINS):
         return "entrenched"
@@ -114,13 +129,15 @@ class BacklinkTargetFinder:
 
     def __init__(self, brand_domains: Iterable[str] = ()):
         self.brand = tuple(brand_domains)
-        self._domains: dict[str, dict] = defaultdict(lambda: {
-            "frequency":      0,
-            "class":          "neutral",
-            "sample_titles":  [],
-            "sample_urls":    [],
-            "discovered_via": [],
-        })
+        self._domains: dict[str, dict] = defaultdict(
+            lambda: {
+                "frequency": 0,
+                "class": "neutral",
+                "sample_titles": [],
+                "sample_urls": [],
+                "discovered_via": [],
+            }
+        )
         self._serps_ingested = 0
         self._lock_kw_set: dict[str, set] = defaultdict(set)
 
@@ -171,16 +188,18 @@ class BacklinkTargetFinder:
         out: list[dict] = []
         for domain, entry in self._domains.items():
             weight = CLASS_WEIGHT.get(entry["class"], 1)
-            out.append({
-                "domain":         domain,
-                "frequency":      entry["frequency"],
-                "class":          entry["class"],
-                "class_weight":   weight,
-                "priority_score": entry["frequency"] * weight,
-                "sample_titles":  entry["sample_titles"],
-                "sample_urls":    entry["sample_urls"],
-                "discovered_via": entry["discovered_via"],
-            })
+            out.append(
+                {
+                    "domain": domain,
+                    "frequency": entry["frequency"],
+                    "class": entry["class"],
+                    "class_weight": weight,
+                    "priority_score": entry["frequency"] * weight,
+                    "sample_titles": entry["sample_titles"],
+                    "sample_urls": entry["sample_urls"],
+                    "discovered_via": entry["discovered_via"],
+                }
+            )
         out.sort(key=lambda t: (-t["priority_score"], -t["frequency"], t["domain"]))
         return out
 
@@ -193,11 +212,11 @@ class BacklinkTargetFinder:
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, "bounty_targets.json")
         payload = {
-            "generated_at":         int(time.time()),
-            "vertical":             vertical,
+            "generated_at": int(time.time()),
+            "vertical": vertical,
             "total_serps_ingested": self._serps_ingested,
-            "total_domains":        len(targets),
-            "targets":              targets,
+            "total_domains": len(targets),
+            "targets": targets,
         }
         with open(path, "w") as f:
             json.dump(payload, f, indent=2)

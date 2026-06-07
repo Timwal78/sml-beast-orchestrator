@@ -17,7 +17,6 @@ get an empty string — workers without a registered cross-link target are
 silently skipped (no fabricated links).
 """
 
-
 CROSS_LINKS: dict[str, dict] = {
     "mastersheets": {
         "heading": "Inside the SML stack",
@@ -47,7 +46,7 @@ CROSS_LINKS: dict[str, dict] = {
             "See the full [SML application catalog]({catalog_url})."
         ),
         "links": {
-            "app_url":     "https://www.scriptmasterlabs.com/mastersheets",
+            "app_url": "https://www.scriptmasterlabs.com/mastersheets",
             "catalog_url": "https://www.scriptmasterlabs.com/applications",
         },
     },

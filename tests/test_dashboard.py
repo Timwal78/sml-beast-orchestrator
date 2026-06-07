@@ -12,12 +12,12 @@ import tempfile
 import unittest
 
 # Test isolation — set required env BEFORE importing the proxy module
-os.environ.setdefault("SERPER_API_KEY",     "test-key")
-os.environ.setdefault("X402_PROXY_SECRET",  "test-secret")
+os.environ.setdefault("SERPER_API_KEY", "test-key")
+os.environ.setdefault("X402_PROXY_SECRET", "test-secret")
 
 from flask import Flask
-from sml_beast.dashboard import register_dashboard
 
+from sml_beast.dashboard import register_dashboard
 
 TEST_TOKEN = "test-dashboard-token-32bytes-long-enough"
 AUTH_HEADER = {"Authorization": f"Bearer {TEST_TOKEN}"}
@@ -33,29 +33,45 @@ class DashboardRouteTests(unittest.TestCase):
         with open(os.path.join(ms_dir, "google-sheets-alternative", "page.mdx"), "w") as f:
             f.write("# test page")
         with open(os.path.join(ms_dir, "bounty_targets.json"), "w") as f:
-            json.dump({
-                "generated_at":         1700000000,
-                "vertical":             "mastersheets",
-                "total_serps_ingested": 12,
-                "total_domains":        2,
-                "targets": [
-                    {"domain": "capterra.com", "frequency": 5, "class": "aggregator",
-                     "class_weight": 4, "priority_score": 20,
-                     "sample_titles": ["x"], "sample_urls": ["https://capterra.com/x"],
-                     "discovered_via": ["alts"]},
-                    {"domain": "g2.com", "frequency": 3, "class": "aggregator",
-                     "class_weight": 4, "priority_score": 12,
-                     "sample_titles": ["y"], "sample_urls": ["https://g2.com/y"],
-                     "discovered_via": ["alts"]},
-                ],
-            }, f)
+            json.dump(
+                {
+                    "generated_at": 1700000000,
+                    "vertical": "mastersheets",
+                    "total_serps_ingested": 12,
+                    "total_domains": 2,
+                    "targets": [
+                        {
+                            "domain": "capterra.com",
+                            "frequency": 5,
+                            "class": "aggregator",
+                            "class_weight": 4,
+                            "priority_score": 20,
+                            "sample_titles": ["x"],
+                            "sample_urls": ["https://capterra.com/x"],
+                            "discovered_via": ["alts"],
+                        },
+                        {
+                            "domain": "g2.com",
+                            "frequency": 3,
+                            "class": "aggregator",
+                            "class_weight": 4,
+                            "priority_score": 12,
+                            "sample_titles": ["y"],
+                            "sample_urls": ["https://g2.com/y"],
+                            "discovered_via": ["alts"],
+                        },
+                    ],
+                },
+                f,
+            )
 
         # Fake the proxy ledger
         from threading import Lock
+
         self.ledger_lock = Lock()
         self.ledger = {
             "beast-mastersheets": {"calls": 7, "paid_usdc": 0.007, "last_ts": 1700000050},
-            "beast-xrpl_x402":    {"calls": 3, "paid_usdc": 0.003, "last_ts": 1700000020},
+            "beast-xrpl_x402": {"calls": 3, "paid_usdc": 0.003, "last_ts": 1700000020},
         }
 
         self.app = Flask("test-dash")
@@ -128,6 +144,7 @@ class BeastmodeAestheticGuardTests(unittest.TestCase):
     def setUp(self):
         os.environ["DASHBOARD_AUTH_TOKEN"] = TEST_TOKEN
         from threading import Lock
+
         self.app = Flask("test-aesthetic")
         register_dashboard(self.app, "/tmp/empty-root-doesnt-exist", (Lock(), {}))
         self.client = self.app.test_client()
@@ -156,8 +173,15 @@ class BeastmodeAestheticGuardTests(unittest.TestCase):
 
     def test_no_default_bootstrap_or_corporate_grey(self):
         # No #ccc / #ddd / #888 / #aaa / bootstrap classes
-        for forbidden in ("#cccccc", "#dddddd", "#888888", "#aaaaaa",
-                          "bootstrap", "container-fluid", "btn btn-primary"):
+        for forbidden in (
+            "#cccccc",
+            "#dddddd",
+            "#888888",
+            "#aaaaaa",
+            "bootstrap",
+            "container-fluid",
+            "btn btn-primary",
+        ):
             self.assertNotIn(forbidden.lower(), self.body.lower())
 
     def test_terminal_signifiers_present(self):
@@ -187,6 +211,7 @@ class AuthGateTests(unittest.TestCase):
 
     def _build_app(self):
         from threading import Lock
+
         app = Flask("test-auth")
         register_dashboard(app, "/tmp/auth-test-empty", (Lock(), {}))
         return app
@@ -230,9 +255,11 @@ class AuthGateTests(unittest.TestCase):
         try:
             client = self._build_app().test_client()
             bad = {"Authorization": "Bearer this-is-not-the-token"}
-            self.assertEqual(client.get("/dashboard",                 headers=bad).status_code, 401)
-            self.assertEqual(client.get("/api/dashboard/state",        headers=bad).status_code, 401)
-            self.assertEqual(client.get("/api/dashboard/bounty/mastersheets", headers=bad).status_code, 401)
+            self.assertEqual(client.get("/dashboard", headers=bad).status_code, 401)
+            self.assertEqual(client.get("/api/dashboard/state", headers=bad).status_code, 401)
+            self.assertEqual(
+                client.get("/api/dashboard/bounty/mastersheets", headers=bad).status_code, 401
+            )
         finally:
             os.environ.pop("DASHBOARD_AUTH_TOKEN", None)
 
@@ -241,8 +268,7 @@ class AuthGateTests(unittest.TestCase):
         try:
             client = self._build_app().test_client()
             for bad_hdr in ("", "Basic xxx", "Bearer", "Bearer  ", "Token " + TEST_TOKEN):
-                r = client.get("/api/dashboard/state",
-                               headers={"Authorization": bad_hdr})
+                r = client.get("/api/dashboard/state", headers={"Authorization": bad_hdr})
                 self.assertEqual(r.status_code, 401, f"header={bad_hdr!r}")
         finally:
             os.environ.pop("DASHBOARD_AUTH_TOKEN", None)
@@ -251,8 +277,10 @@ class AuthGateTests(unittest.TestCase):
         os.environ["DASHBOARD_AUTH_TOKEN"] = TEST_TOKEN
         try:
             client = self._build_app().test_client()
-            self.assertEqual(client.get("/dashboard",         headers=AUTH_HEADER).status_code, 200)
-            self.assertEqual(client.get("/api/dashboard/state", headers=AUTH_HEADER).status_code, 200)
+            self.assertEqual(client.get("/dashboard", headers=AUTH_HEADER).status_code, 200)
+            self.assertEqual(
+                client.get("/api/dashboard/state", headers=AUTH_HEADER).status_code, 200
+            )
         finally:
             os.environ.pop("DASHBOARD_AUTH_TOKEN", None)
 

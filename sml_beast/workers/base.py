@@ -17,31 +17,28 @@ from abc import ABC, abstractmethod
 import requests
 
 from sml_beast.adapters.x402_proxy import mint_internal_token
-from sml_beast.intel.serp_gap import analyze, synthesize_page_brief
 from sml_beast.intel.backlink_targets import BacklinkTargetFinder
+from sml_beast.intel.serp_gap import analyze, synthesize_page_brief
 
 logger = logging.getLogger("sml-beast.worker")
 
 
 class Worker(ABC):
     name: str = "base"
-    vertical: str = "base"           # stable key used by the gap engine + JSON-LD factory
+    vertical: str = "base"  # stable key used by the gap engine + JSON-LD factory
     BRAND_DOMAINS: tuple[str, ...] = ("scriptmasterlabs.com",)
-    MIN_PRIORITY: int = 25           # skip keywords whose gap doesn't clear this bar
+    MIN_PRIORITY: int = 25  # skip keywords whose gap doesn't clear this bar
     PROXY_PATH: str = "/api/v1/m2m/serp"
 
-    def __init__(self,
-                 brief: dict,
-                 silos: dict,
-                 proxy_url: str,
-                 output_dir: str,
-                 stop: threading.Event):
-        self.brief      = brief
-        self.silos      = silos
-        self.proxy_url  = proxy_url.rstrip("/")
+    def __init__(
+        self, brief: dict, silos: dict, proxy_url: str, output_dir: str, stop: threading.Event
+    ):
+        self.brief = brief
+        self.silos = silos
+        self.proxy_url = proxy_url.rstrip("/")
         self.output_dir = output_dir
-        self.stop       = stop
-        self.backlinks  = BacklinkTargetFinder(brand_domains=self.BRAND_DOMAINS)
+        self.stop = stop
+        self.backlinks = BacklinkTargetFinder(brand_domains=self.BRAND_DOMAINS)
 
     def serp(self, query: str) -> dict:
         token = mint_internal_token(wallet=f"beast-{self.name}")
@@ -77,22 +74,34 @@ class Worker(ABC):
                     # low-priority SERP still surfaces valuable placement
                     # domains for the M2M bounty list.
                     self.backlinks.ingest(data, kw)
-                    gap  = analyze(data, brand_domains=self.BRAND_DOMAINS, vertical=self.vertical)
+                    gap = analyze(data, brand_domains=self.BRAND_DOMAINS, vertical=self.vertical)
                     if gap.priority_score < self.MIN_PRIORITY:
                         skipped += 1
-                        logger.info("[%s] skip %-40s priority=%d severity=%s",
-                                    self.name, kw, gap.priority_score, gap.gap_severity)
+                        logger.info(
+                            "[%s] skip %-40s priority=%d severity=%s",
+                            self.name,
+                            kw,
+                            gap.priority_score,
+                            gap.gap_severity,
+                        )
                         continue
                     page_brief = synthesize_page_brief(self.brief, gap, vertical=self.vertical)
                     path = self.process_keyword(silo_name, kw, page_brief)
-                    logger.info("[%s] %-40s priority=%d severity=%-8s -> %s",
-                                self.name, kw, gap.priority_score, gap.gap_severity, path)
+                    logger.info(
+                        "[%s] %-40s priority=%d severity=%-8s -> %s",
+                        self.name,
+                        kw,
+                        gap.priority_score,
+                        gap.gap_severity,
+                        path,
+                    )
                 except Exception as e:
                     logger.error("[%s] %s failed: %s", self.name, kw, e)
                 time.sleep(0.6)
             # End of silo — flush the bounty list so progress survives crashes
             # and downstream agents can pick up partial results mid-run.
             bounty_path = self.backlinks.flush(self.vertical, self.output_dir)
-            logger.info("[%s] silo %s complete — bounty list: %s",
-                        self.name, silo_name, bounty_path)
+            logger.info(
+                "[%s] silo %s complete — bounty list: %s", self.name, silo_name, bounty_path
+            )
         logger.info("[%s] worker complete (skipped %d low-priority)", self.name, skipped)
