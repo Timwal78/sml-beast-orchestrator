@@ -28,6 +28,14 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (docs polish phase)
+- `README.md` rewritten for the full BB7 ecosystem — component inventory,
+  architecture ASCII diagram, operator command reference, cron schedule,
+  hard rules, quality gates
+- `Makefile` — `make help`, `make ci`, `make preflight`, `make status`,
+  `make balance`, `make dry-run`, `make kill-on/off`, etc. One-line
+  shortcuts for both dev and operator workflows
+
 ### Added (shipping polish phase)
 - Console scripts: `bb7`, `bb7-preflight`, `bb7-agent` (registered in
   `pyproject.toml [project.scripts]`). After `pip install -e ".[bb7]"`,
