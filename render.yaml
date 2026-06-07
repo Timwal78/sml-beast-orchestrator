@@ -47,3 +47,7 @@ services:
         value: /opt/render/project/src/output
       - key: LOG_LEVEL
         value: INFO
+    disk:
+      name: sml-beast-data
+      mountPath: /opt/render/project/src/output
+      sizeGB: 1
