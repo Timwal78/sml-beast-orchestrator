@@ -1,9 +1,9 @@
 """
-XRPL / x402 agentic infrastructure vertical worker.
+SML Institutional Rails (IRL) / x402 Paywall vertical worker.
 
-Reads XRPL_X402 brief + XRPL_X402_SILOS keyword space, pulls live SERP per
-keyword through the x402 proxy, and writes a reviewed MDX + JSON-LD bundle
-to output/xrpl/<slug>/. No auto-deploy.
+Reads the XRPL_X402 canonical brief + XRPL_X402_SILOS keyword space. Same
+loop as the MasterSheets worker — gap analysis happens in the base class;
+this subclass just renders the gap-overlaid page brief.
 """
 
 from sml_beast.content.briefs    import XRPL_X402
@@ -17,5 +17,5 @@ class XrplX402Worker(Worker):
     BRIEF = XRPL_X402
     SILOS = XRPL_X402_SILOS
 
-    def process_keyword(self, silo_name: str, keyword: str, serp_data: dict) -> str:
-        return write_page(self.output_dir, self.brief, silo_name, keyword, serp_data)
+    def process_keyword(self, silo_name: str, keyword: str, page_brief: dict) -> str:
+        return write_page(self.output_dir, page_brief, silo_name, keyword)

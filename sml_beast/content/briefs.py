@@ -28,18 +28,18 @@ MASTERSHEETS = {
 }
 
 XRPL_X402 = {
-    "name":             "SML XRPL / x402 Agentic Infrastructure",
+    "name":             "SML Institutional Rails (IRL) / x402 Paywall",
     "domain":           "https://www.scriptmasterlabs.com",
-    "route":            "/xrpl-x402",
-    "positioning":      "The absolute authority on machine-to-machine (M2M) payment infrastructure and AI agent economies.",
+    "route":            "/infrastructure",
+    "positioning":      "Sovereign machine-to-machine (M2M) micro-payment firewall and AI agent economy infrastructure.",
     "settlement":       {
-        "rail":      "XRPL",
+        "rails":     ("XRPL", "Xahau"),
         "median_ms": 50,
-        "summary":   "Sub-50 ms XRPL settlement receipts.",
+        "summary":   "Sub-50 ms cryptographic payment receipts settled on the XRP Ledger and Xahau network.",
     },
     "auth_model": {
         "api_keys_required": False,
-        "summary":           "Zero API keys. Agents pay via HTTP 402 dynamically — pure protocol.",
+        "summary":           "HTTP 402 Payment Required — zero static API keys, zero corporate credit lines. Agents pay per call.",
     },
     "live_services": (
         "https://squeezeos-api.onrender.com",

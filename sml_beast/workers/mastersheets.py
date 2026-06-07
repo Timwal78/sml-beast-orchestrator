@@ -1,9 +1,9 @@
 """
 MasterSheets vertical worker.
 
-Reads MASTERSHEETS canonical brief + MASTERSHEETS_SILOS keyword space, pulls
-live SERP per keyword through the x402 proxy, and writes a reviewed MDX +
-JSON-LD bundle to output/mastersheets/<slug>/. No auto-deploy.
+Reads the MASTERSHEETS canonical brief + MASTERSHEETS_SILOS keyword space.
+The base Worker handles the SERP fetch and gap analysis; this subclass
+just turns a gap-overlaid page brief into a disk artifact.
 """
 
 from sml_beast.content.briefs    import MASTERSHEETS
@@ -17,5 +17,5 @@ class MasterSheetsWorker(Worker):
     BRIEF = MASTERSHEETS
     SILOS = MASTERSHEETS_SILOS
 
-    def process_keyword(self, silo_name: str, keyword: str, serp_data: dict) -> str:
-        return write_page(self.output_dir, self.brief, silo_name, keyword, serp_data)
+    def process_keyword(self, silo_name: str, keyword: str, page_brief: dict) -> str:
+        return write_page(self.output_dir, page_brief, silo_name, keyword)
