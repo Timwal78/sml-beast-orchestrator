@@ -6,6 +6,24 @@ serves both protocol traffic and the command UI. The dashboard is read-only
 — it surfaces live ledger state, harvested bounty targets, generated pages,
 and per-vertical gap statistics. It never mutates engine state.
 
+Authentication — FAILURE-CLOSED
+-------------------------------
+The dashboard routes are registered ONLY if DASHBOARD_AUTH_TOKEN is set
+to a non-empty value. Without the env var, the routes do not exist at
+all (404 from Flask's default handler). With the env var, every
+dashboard route requires `Authorization: Bearer <token>` with constant-
+time comparison.
+
+The HTML page accepts a `?token=<>` query-string convenience on first
+load — the page strips the token from the URL via history.replaceState
+and stores it in sessionStorage for subsequent fetches. API endpoints
+require the header; the query-string shortcut does not extend to them.
+
+Per BB7_DESIGN.md §9.6, the dashboard cannot surface paid-placement
+records or any data that maps SML to specific external domains. The
+auth gate is the first defense; the audit_no_secret_leak test is the
+second.
+
 Aesthetic mandate (strict): pure black backgrounds (#000000 / #050505 /
 #0a0a0a), neon accents only (cyan / magenta / electric green / amber),
 monospace type, sharp corners, terminal-grid layout. Zero default browser
@@ -19,9 +37,14 @@ Routes
   GET /api/dashboard/pages/<v>     — list of generated pages for vertical v
 """
 
+import functools
+import hmac
 import json
+import logging
 import os
-from flask import Flask, jsonify, abort, Response
+from flask import Flask, abort, jsonify, request, Response
+
+logger = logging.getLogger("sml-beast.dashboard")
 
 
 VERTICALS = ("mastersheets", "xrpl")   # output dir names, not worker.vertical keys
@@ -60,16 +83,58 @@ def _list_pages(output_root: str, vertical: str) -> list[dict]:
     return out
 
 
+def _make_auth_decorator(token: str, allow_query_param_on_html: bool = False):
+    """Build a route-level auth decorator bound to a specific token.
+
+    Bearer header is the canonical auth path for both HTML + JSON routes.
+    `allow_query_param_on_html=True` opens an additional `?token=<>` route
+    used only by the HTML page for first-load convenience — the page
+    strips the token from the URL and moves it into sessionStorage."""
+
+    def decorator(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            provided = ""
+            h = request.headers.get("Authorization", "")
+            if h.startswith("Bearer "):
+                provided = h[7:].strip()
+            if not provided and allow_query_param_on_html:
+                provided = (request.args.get("token") or "").strip()
+            if not provided or not hmac.compare_digest(provided, token):
+                abort(401)
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
     """Attach the dashboard routes to an existing Flask app.
+
+    FAILURE-CLOSED: if DASHBOARD_AUTH_TOKEN is not set in the environment
+    the routes are NOT registered — Flask returns its default 404 for
+    /dashboard and /api/dashboard/*. There is no soft-fallback path that
+    serves the dashboard open. The operator must configure the token
+    before the dashboard exists.
 
     ledger_ref is a (lock, dict) tuple — the proxy's in-process ledger.
     Passing a reference (not a copy) lets the dashboard see live state
     without any cross-thread polling layer."""
 
+    token = os.environ.get("DASHBOARD_AUTH_TOKEN", "").strip()
+    if not token:
+        logger.warning(
+            "DASHBOARD_AUTH_TOKEN unset — dashboard routes will NOT be "
+            "registered. Set this env var to a cryptographically-random "
+            "value (e.g. `openssl rand -hex 32`) to enable the dashboard.")
+        return
+
+    require_api_auth  = _make_auth_decorator(token, allow_query_param_on_html=False)
+    require_html_auth = _make_auth_decorator(token, allow_query_param_on_html=True)
+
     ledger_lock, ledger = ledger_ref
 
     @app.route("/api/dashboard/state", methods=["GET"])
+    @require_api_auth
     def state():
         with ledger_lock:
             wallets = [
@@ -100,18 +165,23 @@ def register_dashboard(app: Flask, output_root: str, ledger_ref: tuple) -> None:
         })
 
     @app.route("/api/dashboard/bounty/<vertical>", methods=["GET"])
+    @require_api_auth
     def bounty(vertical: str):
         v = _safe_vertical(vertical)
         return jsonify(_read_bounty(output_root, v))
 
     @app.route("/api/dashboard/pages/<vertical>", methods=["GET"])
+    @require_api_auth
     def pages(vertical: str):
         v = _safe_vertical(vertical)
         return jsonify({"vertical": v, "pages": _list_pages(output_root, v)})
 
     @app.route("/dashboard", methods=["GET"])
+    @require_html_auth
     def dashboard():
         return Response(_DASHBOARD_HTML, mimetype="text/html")
+
+    logger.info("Dashboard mounted at /dashboard (auth gate active)")
 
 
 # ── single-file Beastmode UI ─────────────────────────────────────────────────
@@ -321,6 +391,24 @@ _DASHBOARD_HTML = r"""<!doctype html>
 <script>
 const VERTICALS = ["mastersheets", "xrpl"];
 
+// Auth handshake: ?token=<> on first load -> sessionStorage -> Bearer header
+// for all subsequent fetches. The URL is stripped so the token doesn't leak
+// into browser history, server logs, or shoulder-surfing screenshots.
+(function lockAuth() {
+  const url = new URL(window.location.href);
+  const t = url.searchParams.get("token");
+  if (t) {
+    sessionStorage.setItem("beast_dash_token", t);
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+  }
+})();
+
+function authHeaders() {
+  const t = sessionStorage.getItem("beast_dash_token");
+  return t ? { "Authorization": "Bearer " + t } : {};
+}
+
 function ago(ts) {
   if (!ts) return "never";
   const s = Math.max(0, Math.floor(Date.now()/1000 - ts));
@@ -331,7 +419,13 @@ function ago(ts) {
 
 async function pull() {
   try {
-    const r = await fetch("/api/dashboard/state", { cache: "no-store" });
+    const r = await fetch("/api/dashboard/state", {
+      cache: "no-store", headers: authHeaders() });
+    if (r.status === 401) {
+      sessionStorage.removeItem("beast_dash_token");
+      document.body.innerHTML = '<div style="padding:40px;color:#ff00ff;font-family:JetBrains Mono,monospace;text-shadow:0 0 6px #ff00ff;">[401] // session expired. reload with ?token=&lt;your-token&gt;</div>';
+      return;
+    }
     const s = await r.json();
 
     document.getElementById("stat-calls").textContent   = s.proxy.total_calls;
@@ -362,7 +456,9 @@ async function pull() {
 
   for (const v of VERTICALS) {
     try {
-      const r = await fetch(`/api/dashboard/bounty/${v}`, { cache: "no-store" });
+      const r = await fetch(`/api/dashboard/bounty/${v}`, {
+        cache: "no-store", headers: authHeaders() });
+      if (r.status === 401) continue;
       const b = await r.json();
       const tbl = document.getElementById(`tbl-bounty-${v}`);
       if (!tbl) continue;
