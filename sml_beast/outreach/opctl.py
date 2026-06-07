@@ -210,6 +210,19 @@ def cmd_recent(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_balance(args: argparse.Namespace) -> int:
+    """Query the hot wallet's XRPL balance and report USDC-equivalent."""
+    from .balance import BalanceCheckError, check_hot_wallet
+
+    try:
+        result = check_hot_wallet()
+    except BalanceCheckError as e:
+        _err(f"balance check failed: {e}")
+        return 2
+    print(json.dumps(result.to_dict(), indent=2))
+    return 0 if result.healthy else 1
+
+
 def cmd_alerts_sweep(args: argparse.Namespace) -> int:
     """Run a one-shot alert sweep — kill switch transition, review backlog."""
     from .alerts import check_and_alert
@@ -301,6 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("recent", help="last N state changes")
     s.add_argument("n", nargs="?", type=int, default=20, help="number of events (default 20)")
     s.set_defaults(fn=cmd_recent)
+
+    s = sub.add_parser(
+        "balance",
+        help="query hot wallet XRPL balance (exit 0=healthy, 1=low, 2=error)",
+    )
+    s.set_defaults(fn=cmd_balance)
 
     s = sub.add_parser(
         "alerts-sweep",

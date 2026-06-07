@@ -265,6 +265,7 @@ def run_cycle(
     verticals: tuple[str, ...] = DEFAULT_VERTICALS,
     output_root: Path | None = None,
     xrpl_client=None,
+    balance_check_fn=None,
 ) -> dict:
     """Run one full outreach cycle. Returns a summary dict.
 
@@ -302,7 +303,39 @@ def run_cycle(
         "total_attempted": 0,
         "total_sent": 0,
         "dry_run": _DRY_RUN,
+        "balance_check": None,
     }
+
+    # Pre-flight gate — verify hot wallet has headroom before spending. The
+    # check is best-effort; a network error returns a degraded result and we
+    # proceed (operator will see the warning via alerts + logs). Only a
+    # confirmed unhealthy balance aborts the cycle.
+    # Injectable balance_check_fn allows tests to skip the network round-trip.
+    if not _DRY_RUN and balance_check_fn is not None:
+        try:
+            bal = balance_check_fn()
+            summary["balance_check"] = bal.to_dict() if hasattr(bal, "to_dict") else bal
+            if hasattr(bal, "healthy") and bal.error is None and not bal.healthy:
+                logger.error(
+                    "ABORT cycle: hot wallet balance %.2f USDC below threshold",
+                    bal.usdc_equiv,
+                )
+                return summary
+        except Exception as e:
+            logger.warning("balance pre-flight failed: %s — proceeding cautiously", e)
+    elif not _DRY_RUN:
+        try:
+            from .balance import check_and_alert_if_low
+            bal = check_and_alert_if_low()
+            summary["balance_check"] = bal.to_dict()
+            if bal.error is None and not bal.healthy:
+                logger.error(
+                    "ABORT cycle: hot wallet balance %.2f USDC below threshold",
+                    bal.usdc_equiv,
+                )
+                return summary
+        except Exception as e:
+            logger.warning("balance pre-flight failed: %s — proceeding cautiously", e)
 
     for vertical in verticals:
         targets = _load_targets(vertical, root)

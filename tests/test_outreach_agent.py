@@ -91,6 +91,16 @@ class _AgentBase(unittest.TestCase):
         c.send_demo_payment_for_usdc.return_value = ("TXHASH001", 10.0)
         return c
 
+    def _healthy_balance_fn(self):
+        """Return a stub balance check that always reports healthy.
+        Lets tests skip the real XRPL account_info call."""
+        check = MagicMock()
+        check.healthy = True
+        check.error = None
+        check.usdc_equiv = 100.0
+        check.to_dict.return_value = {"healthy": True, "usdc_equiv": 100.0, "error": None}
+        return lambda: check
+
     def _mock_smtp(self):
         smtp = MagicMock()
 
@@ -102,12 +112,12 @@ class _AgentBase(unittest.TestCase):
 
 class EmptyCycleTests(_AgentBase):
     def test_no_targets_returns_zero_summary(self):
-        result = self.a.run_cycle(output_root=self.root, xrpl_client=MagicMock())
+        result = self.a.run_cycle(output_root=self.root, xrpl_client=MagicMock(), balance_check_fn=self._healthy_balance_fn())
         self.assertEqual(result["total_attempted"], 0)
         self.assertEqual(result["total_sent"], 0)
 
     def test_summary_has_expected_keys(self):
-        result = self.a.run_cycle(output_root=self.root, xrpl_client=MagicMock())
+        result = self.a.run_cycle(output_root=self.root, xrpl_client=MagicMock(), balance_check_fn=self._healthy_balance_fn())
         self.assertIn("total_attempted", result)
         self.assertIn("total_sent", result)
         self.assertIn("vertical", result)
@@ -134,7 +144,7 @@ class HappyPathTests(_AgentBase):
              patch.object(self.a, "send_pitch") as mock_send:
             mock_send.return_value = MagicMock(message_id="<mid@sml.com>")
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertEqual(result["total_sent"], 1)
@@ -156,7 +166,7 @@ class HappyPathTests(_AgentBase):
              patch.object(self.a, "send_pitch") as mock_send:
             mock_send.return_value = MagicMock(message_id="<mid@sml.com>")
             self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         # Reload state from disk to verify persistence
@@ -185,7 +195,7 @@ class KillSwitchTests(_AgentBase):
 
         with patch.object(self.a, "enrich_domain", return_value=enriched):
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=MagicMock()
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=MagicMock(), balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertEqual(result["total_sent"], 0)
@@ -207,7 +217,7 @@ class SkipPathTests(_AgentBase):
 
         with patch.object(self.a, "enrich_domain", return_value=enriched):
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertEqual(result["total_sent"], 0)
@@ -225,7 +235,7 @@ class SkipPathTests(_AgentBase):
 
         with patch.object(self.a, "enrich_domain", return_value=enriched):
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertEqual(result["total_sent"], 0)
@@ -248,7 +258,7 @@ class SkipPathTests(_AgentBase):
         with patch.object(self.a, "enrich_domain", return_value=enriched), \
              patch.object(self.a, "send_pitch") as mock_send:
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertEqual(result["total_sent"], 0)
@@ -280,7 +290,7 @@ class DryRunTests(_AgentBase):
         with patch.object(self.a, "enrich_domain", return_value=enriched), \
              patch.object(self.a, "send_pitch") as mock_send:
             result = self.a.run_cycle(
-                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl
+                verticals=("mastersheets",), output_root=self.root, xrpl_client=xrpl, balance_check_fn=self._healthy_balance_fn()
             )
 
         self.assertTrue(result["dry_run"])

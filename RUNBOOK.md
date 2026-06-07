@@ -19,6 +19,7 @@ python -m sml_beast.outreach.opctl metrics             # raw verification log
 python -m sml_beast.outreach.opctl metrics-stats       # aggregate conversion
 python -m sml_beast.outreach.opctl domain example.com  # single-domain entry
 python -m sml_beast.outreach.opctl recent 10           # last 10 state changes
+python -m sml_beast.outreach.opctl balance             # XRPL hot wallet balance
 python -m sml_beast.outreach.opctl alerts-sweep        # one-shot Discord check
 python -m sml_beast.outreach.opctl poll                # IMAP drain + classify
 python -m sml_beast.outreach.opctl replies             # operator review queue

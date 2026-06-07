@@ -28,6 +28,20 @@ sections only.
 - Multiple ruff/mypy findings across the codebase (30 auto-fixed,
   7 hand-fixed); CI now green on all configured rules
 
+### Added (balance check phase)
+- `outreach/balance.py` — XRPL hot wallet balance query; converts raw XRP to
+  USDC-equivalent via BB7_XRP_PRICE_USDC; healthy/unhealthy classification
+  vs 20 USDC threshold; degraded result on network error (no spam alerts)
+- `agent.run_cycle()` pre-flight: confirmed unhealthy balance aborts cycle
+  before any spend; network errors log a warning and proceed cautiously;
+  injectable `balance_check_fn` for test isolation
+- `preflight.check_hot_wallet_balance` — balance check is now part of the
+  preflight validator
+- `opctl balance` — query balance (exit 0=healthy, 1=low, 2=config error)
+- `.github/workflows/bb7_balance_sweep.yml` — every 2h weekday balance check
+- `agent` tests refactored to inject `balance_check_fn` (suite went from
+  82s back to 2s)
+
 ### Added (alerts phase)
 - `outreach/alerts.py` — Discord webhook operator alerts; types: KILL_SWITCH_
   ACTIVATED/DEACTIVATED, LOW_HOT_WALLET, MANUAL_REVIEW_BACKLOG, CYCLE_COMPLETE;

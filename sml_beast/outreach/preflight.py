@@ -162,6 +162,50 @@ def check_xrpl_wallet(report: PreflightReport) -> None:
         report.add_fail("xrpl:wallet", f"seed invalid: {e}")
 
 
+def check_hot_wallet_balance(report: PreflightReport, *, account_info_fn=None) -> None:
+    """Verify hot wallet has enough headroom to run a cycle.
+
+    Skipped when no seed is configured (already flagged by check_env_vars).
+    Skipped when the XRPL fetcher isn't injected and the network isn't
+    reachable — that's check_xrpl_network's job, not this one's."""
+    seed = os.environ.get("BB7_XRPL_WALLET_SEED", "").strip()
+    if not seed:
+        return
+
+    try:
+        from .balance import (
+            LOW_HOT_WALLET_THRESHOLD_USDC,
+            BalanceCheckError,
+            check_hot_wallet,
+        )
+    except ImportError as e:
+        report.add_warn("xrpl:balance", f"balance module unavailable: {e}")
+        return
+
+    try:
+        result = check_hot_wallet(account_info_fn=account_info_fn)
+    except BalanceCheckError as e:
+        report.add_fail("xrpl:balance", str(e))
+        return
+
+    if result.error:
+        # Network error — soft warn, operator may have intentional offline mode
+        report.add_warn("xrpl:balance", f"fetch error: {result.error}")
+        return
+
+    detail = (
+        f"raw={result.raw_xrp:.4f}XRP spendable={result.spendable_xrp:.4f}XRP "
+        f"~{result.usdc_equiv:.2f}USDC"
+    )
+    if result.healthy:
+        report.add_ok("xrpl:balance", f"{detail} >= {LOW_HOT_WALLET_THRESHOLD_USDC} threshold")
+    else:
+        report.add_fail(
+            "xrpl:balance",
+            f"{detail} BELOW {LOW_HOT_WALLET_THRESHOLD_USDC} threshold — refill before cycle",
+        )
+
+
 def check_xrpl_network(report: PreflightReport, *, fetch_fn=None) -> None:
     """Verify the configured RPC endpoint responds to server_info."""
     network = os.environ.get("BB7_XRPL_NETWORK", "testnet").strip()
@@ -355,6 +399,7 @@ def run_preflight(skip_network: bool = False) -> PreflightReport:
 
     if not skip_network:
         check_xrpl_network(report)
+        check_hot_wallet_balance(report)
         check_smtp_auth(report)
         check_dns_records(report)
     else:
