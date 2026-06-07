@@ -10,6 +10,7 @@ generator sees at runtime. That's the feedback loop.
 """
 
 import logging
+import os
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -100,7 +101,7 @@ class Worker(ABC):
                 time.sleep(0.6)
             # End of silo — flush the bounty list so progress survives crashes
             # and downstream agents can pick up partial results mid-run.
-            bounty_path = self.backlinks.flush(self.vertical, self.output_dir)
+            bounty_path = self.backlinks.flush(self.vertical, os.path.dirname(self.output_dir))
             logger.info(
                 "[%s] silo %s complete — bounty list: %s", self.name, silo_name, bounty_path
             )
