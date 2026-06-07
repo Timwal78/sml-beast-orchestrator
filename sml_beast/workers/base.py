@@ -18,6 +18,7 @@ import requests
 
 from sml_beast.adapters.x402_proxy import mint_internal_token
 from sml_beast.intel.serp_gap import analyze, synthesize_page_brief
+from sml_beast.intel.backlink_targets import BacklinkTargetFinder
 
 logger = logging.getLogger("sml-beast.worker")
 
@@ -40,6 +41,7 @@ class Worker(ABC):
         self.proxy_url  = proxy_url.rstrip("/")
         self.output_dir = output_dir
         self.stop       = stop
+        self.backlinks  = BacklinkTargetFinder(brand_domains=self.BRAND_DOMAINS)
 
     def serp(self, query: str) -> dict:
         token = mint_internal_token(wallet=f"beast-{self.name}")
@@ -67,9 +69,14 @@ class Worker(ABC):
             for kw in keywords:
                 if self.stop.is_set():
                     logger.info("[%s] stop requested; exiting", self.name)
+                    self.backlinks.flush(self.vertical, self.output_dir)
                     return
                 try:
                     data = self.serp(kw)
+                    # Harvest backlink targets BEFORE the priority gate — a
+                    # low-priority SERP still surfaces valuable placement
+                    # domains for the M2M bounty list.
+                    self.backlinks.ingest(data, kw)
                     gap  = analyze(data, brand_domains=self.BRAND_DOMAINS, vertical=self.vertical)
                     if gap.priority_score < self.MIN_PRIORITY:
                         skipped += 1
@@ -83,4 +90,9 @@ class Worker(ABC):
                 except Exception as e:
                     logger.error("[%s] %s failed: %s", self.name, kw, e)
                 time.sleep(0.6)
+            # End of silo — flush the bounty list so progress survives crashes
+            # and downstream agents can pick up partial results mid-run.
+            bounty_path = self.backlinks.flush(self.vertical, self.output_dir)
+            logger.info("[%s] silo %s complete — bounty list: %s",
+                        self.name, silo_name, bounty_path)
         logger.info("[%s] worker complete (skipped %d low-priority)", self.name, skipped)

@@ -27,6 +27,8 @@ import os
 import re
 import time
 
+from .link_graph import render_cross_link_block
+
 
 SAMEAS_XRPL_X402 = [
     "https://github.com/timwal78/squeezeos",
@@ -105,6 +107,10 @@ def build_mdx(page_brief: dict, keyword: str, intent_silo: str) -> tuple[str, st
         body += ["## Questions buyers actually ask", ""]
         for q, a in paa:
             body += [f"### {q}", "", a or "_Answer drafted from product brief — review before publish._", ""]
+
+    # Cross-vertical contextual link block. Bleeds authority between the
+    # MasterSheets silo and the IRL/x402 silo so backlinks to either lift both.
+    body += render_cross_link_block(page_brief.get("_vertical"))
 
     if rel:
         body += ["## Related searches we cover", ""] + [f"- {r}" for r in rel] + [""]
