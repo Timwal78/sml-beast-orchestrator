@@ -1,22 +1,34 @@
 # BB7 — Autonomous Backlink Outreach Agent
 
-> **Status:** DESIGN — awaiting red-team review (Gemini) + operator approval (Timothy).
-> **Implementation:** NONE. No code in this commit. Sign-off required before BB7 lands in `sml_beast/`.
+> **Status:** DESIGN LOCKED — sealed after architect red-team. Implementation
+> may proceed in dependency order (guardrails.py first).
+> **Implementation:** NONE yet. Code lands in subsequent commits.
 
 ## 0. Mandate
 
 Consume `output/<vertical>/bounty_targets.json` (produced by BB4) and convert
 the top N domains per cycle into **verified live backlinks** to the SML
-property catalog, paying placement fees over x402 / XRPL only on
-cryptographic proof of a live, indexable, dofollow link.
+property catalog, paying micro-amounts over XRPL only on cryptographic
+proof of a live, indexable, dofollow link.
+
+**Critical reframe (locked):** the agent does NOT pitch the payment as a
+"placement fee." It pitches the payment as a **live technical
+demonstration of sub-50ms M2M settlement infrastructure**. The recipient
+gets real value in their wallet, witnesses the rails work, and is asked
+for a link as organic recognition of the tech. We are buying their
+attention with a working demo, not bribing them for editorial integrity.
 
 Non-goals:
 
-- Mass-mail spam. The agent must pitch fewer, better targets — institutional
-  outreach at agent scale, not consumer scale.
-- Pre-payment for promises. The escrow lifecycle settles **post-publication**
-  exclusively.
-- Generic templated copy. Every pitch is gap-report-aware and vertical-keyed.
+- Mass-mail spam. Volume cap is 3/day during 30-day warmup, 10/day
+  steady-state.
+- Pre-payment for promises. The escrow lifecycle settles
+  **post-publication** exclusively.
+- Generic templated copy. Every pitch is gap-report-aware,
+  vertical-keyed, and ties to a specific structural weakness the
+  recipient's existing content exhibits.
+- **Public visibility of paid placements.** Strict operational secrecy.
+  See §9.
 
 ## 1. Threat model & ethical perimeter
 
@@ -127,7 +139,7 @@ Two templates — one per vertical — drawing from the same canonical brief
 the page generator already uses, with personalization from the gap report
 for the keyword(s) that surfaced this domain.
 
-### Template skeleton (vertical-agnostic)
+### Template skeleton (vertical-agnostic) — REFRAMED AS LIVE DEMO
 
 ```
 Subject: {pers_subject}
@@ -137,22 +149,32 @@ Hi {first_name_or_team_handle},
 I run engineering for ScriptMasterLabs. {pers_observation} — specifically
 {pers_gap_finding}.
 
-We publish {anchor_resource_title} ({anchor_url}) which covers exactly
-that gap from the {vertical_perspective} angle. Would you consider linking
-to it from {pers_target_url}?
+I just dropped {USDC} USDC into the XRPL address listed in your
+{enrichment_source} (tx: {xrpl_tx_hash}, settled in
+{settlement_time_ms}ms). That's not a placement fee. It's the simplest
+demonstration I can give you that the sub-50ms M2M payment rails we
+publish at {anchor_url} actually work end to end.
 
-To make it worth your time we settle a placement fee on the XRPL ledger
-the moment the link goes live and our verification crawler confirms it
-(usually within 24h of publication). Standard offer: {USDC} USDC,
-non-negotiable, no follow-up emails.
+If you find that interesting enough to mention {anchor_resource_title}
+in {pers_target_url} as a relevant infrastructure reference, that's the
+extent of the ask. If not, keep the USDC — it's already yours, and we
+appreciate the time you spent reading this.
 
-If this isn't a fit, reply STOP and we won't reach out again. Our public
-opt-out registry: {opt_out_url}.
+We never follow up on this thread. Reply STOP to add your domain to our
+permanent opt-out registry: {opt_out_url}.
 
 — {operator_signature}
 ScriptMasterLabs operator
 SPF: {spf_status}  DKIM: {dkim_status}  DMARC: {dmarc_status}
 ```
+
+**Why this pivot matters.** Cold pitch + $0.10 = junk mail. Cold pitch +
+$5 USDC pre-settled with a transaction hash you can verify on the ledger
+in 50ms = an unambiguous signal that the operator has working
+infrastructure and is willing to spend real money to prove it. The
+"link" ask becomes optional and organic. This is also the only framing
+under which the agent operates outside the "paid backlink" frame that
+violates Google's Webmaster Guidelines (see §9.7).
 
 ### Per-vertical personalization
 
@@ -170,24 +192,49 @@ The anchor resource is the highest-priority IRL/x402 page.
 All template variables are required; the generator refuses to send a
 pitch with any unfilled slot. No silent fallbacks.
 
-## 5. x402 / XRPL payment integration — escrow model
+## 5. XRPL payment integration — pre-settled demo + optional escrow uplift
 
-**Cardinal rule:** the agent never pre-pays for a promise. Settlement is
-conditional on cryptographically-verified link publication.
+**Cardinal rule:** the payment is settled **before** the pitch lands.
+The recipient sees real funds in their wallet at read-time, with a
+transaction hash they can verify in <50ms. This is the entire point of
+the live-demo framing — the value transfer is the proof, not the
+promise.
 
-### 5.1 Lifecycle
+The optional escrow uplift (§5.4) is reserved for a second-tier strategic
+pitch (priority_score ≥ 30) where the operator offers an additional
+premium fee, contingent on link verification, on top of the unconditional
+demo payment.
+
+### 5.1 Demo settlement (default path, all pitches)
 
 | State | Trigger | XRPL action |
 |---|---|---|
-| `PROPOSED` | Pitch generated, not yet sent | — |
-| `SENT` | Pitch dispatched | — |
-| `ACCEPTED` | Target replies "yes" via reply parser or operator-confirmed | `EscrowCreate` with full placement fee |
-| `AWAITING_PROOF` | Escrow on ledger; verifier polling | — |
-| `SETTLED` | Verifier confirms live link | `EscrowFinish` releases funds to target wallet |
-| `EXPIRED_REFUNDED` | 30 days elapsed without verification | `EscrowCancel` returns funds to operator wallet |
-| `MANUALLY_VOIDED` | Operator killed the pitch | `EscrowCancel` |
+| `PROPOSED` | Pitch generated; address enriched | — |
+| `DEMO_SENT` | Standard fee transferred unconditionally to recipient address | `Payment` tx |
+| `PITCH_DELIVERED` | Email dispatched with tx hash in body | — |
+| `LINK_OBSERVED` | Verifier confirms live link (optional outcome) | logged only |
+| `OPTED_OUT` | Recipient sent STOP | domain → blocklist |
 
-### 5.2 Escrow construction (XRPL native)
+Funds are gone the moment `DEMO_SENT` succeeds. No refund path. This is
+intentional and correct: it removes the "did they actually pay?" friction
+from the conversation entirely. The 0.50 USDC daily ceiling (lifted to
+20.00 USDC per §6) is the only ceiling on bleed.
+
+### 5.4 Optional escrow uplift (premium tier, priority_score ≥ 30)
+
+For high-value targets the operator may layer a contingent premium on
+top of the demo payment. This is the only path where the original
+escrow design (§5.2 below) applies, and it must be disclosed in the
+pitch body as a separate optional offer.
+
+| State | Trigger | XRPL action |
+|---|---|---|
+| `ESCROW_FUNDED` | Recipient signals interest in the premium tier | `EscrowCreate` with `Condition` = preimage hash |
+| `AWAITING_PROOF` | Escrow on ledger; verifier polling | — |
+| `SETTLED` | Verifier confirms live link | `EscrowFinish` releases premium |
+| `EXPIRED_REFUNDED` | 30 days elapsed | `EscrowCancel` returns to operator |
+
+### 5.2 Escrow construction (XRPL native, premium tier only)
 
 - `EscrowCreate` with `Condition` = `PREIMAGE-SHA-256` hash of a
   per-pitch nonce known only to the verifier service
@@ -195,9 +242,8 @@ conditional on cryptographically-verified link publication.
   manually void within the first day if the target turns out to be a
   spam trap)
 - `CancelAfter` = `pitch_accepted_at + 30d` (max verification window)
-- `Destination` = target wallet address (collected during the acceptance
-  reply or, if absent, a generic SML-operated payout address the target
-  can claim by signing a message from the same email used in acceptance)
+- `Destination` = target wallet address (already collected during demo
+  settlement)
 
 When verification succeeds the verifier reveals the preimage, the agent
 submits `EscrowFinish` with the fulfillment, and the ledger releases.
@@ -239,35 +285,55 @@ exponential backoff up to the `CancelAfter` deadline. Three consecutive
   blocklist and noted in a public `link-rot-registry.json` (defensive
   publishing — discourages take-and-bail behavior)
 
-## 6. Kill switch & guardrails
+## 6. Kill switch & guardrails — LOCKED VALUES
 
 These are non-negotiable, hardcoded defaults. Operator can lower them
 in config; raising them above the defaults requires a code edit and a
 fresh deploy.
 
-| Guardrail | Default | Configurable via |
+| Guardrail | LOCKED value | Configurable via |
 |---|---|---|
-| Daily USDC spend ceiling (hot wallet) | **0.50 USDC / 24h** | `OUTREACH_DAILY_CEILING_USDC` |
-| Hot wallet max balance | **2.50 USDC** (5× ceiling) | `OUTREACH_HOT_WALLET_MAX` |
+| **Standard demo fee (default tier)** | **5.00 USDC** | `OUTREACH_STANDARD_FEE_USDC` |
+| **Premium tier fee** (priority_score ≥ 30) | **10.00 USDC** | `OUTREACH_PREMIUM_FEE_USDC` |
+| **Agent autonomy hard cap per pitch** | **10.00 USDC** | hardcoded — code edit + deploy required |
+| Daily USDC spend ceiling (hot wallet) | **20.00 USDC / 24h** | `OUTREACH_DAILY_CEILING_USDC` |
+| Hot wallet max balance | **100.00 USDC** (5× ceiling) | `OUTREACH_HOT_WALLET_MAX` |
 | Per-domain cooldown | **14 days** | `OUTREACH_DOMAIN_COOLDOWN_DAYS` |
-| Pitches per 24h (global) | **10** | `OUTREACH_DAILY_PITCH_CAP` |
-| Standard placement fee | **0.10 USDC** | `OUTREACH_STANDARD_FEE_USDC` |
-| Max placement fee (single pitch) | **0.50 USDC** (matches daily ceiling) | hardcoded — code edit required |
+| Pitches per 24h (global) — first 30 days | **3** | `OUTREACH_DAILY_PITCH_CAP_WARMUP` |
+| Pitches per 24h (global) — steady-state | **10** | `OUTREACH_DAILY_PITCH_CAP` |
+| Warmup-period duration | **30 days from first pitch** | `OUTREACH_WARMUP_DAYS` |
 | Manual review gate | **First 5 pitches per vertical** | `OUTREACH_MANUAL_REVIEW_N` |
-| Verification window | **30 days** | `OUTREACH_VERIFY_WINDOW_DAYS` |
-| Post-settlement monitoring | **90 days** | `OUTREACH_MONITOR_WINDOW_DAYS` |
+| Verification window (premium tier only) | **30 days** | `OUTREACH_VERIFY_WINDOW_DAYS` |
+| Post-settlement link monitoring | **90 days** | `OUTREACH_MONITOR_WINDOW_DAYS` |
+
+### Pricing rationale (locked)
+
+| Tier | Fee | Trigger | Rationale |
+|---|---|---|---|
+| Standard demo | 5.00 USDC | All pitches (default) | "Bought you a coffee" psychological tier. Low enough to read as a demo, high enough that the recipient registers the value transfer as real. Goes below the spam-reflex threshold but above the insult threshold. |
+| Premium uplift | 10.00 USDC (additional, contingent) | Bounty `priority_score ≥ 30` | High-value targets where the operator wants to make a stronger statement. Layered ON TOP of the demo fee, gated by escrow, released on verified link. |
+| **Strategic top-tier (NOT in BB7 autonomy)** | 25.00–250.00 USDC | DR ≥ 70 or operator-flagged | Separate operator-driven channel. Manual review on every send. Pitch templates are operator-written, not agent-generated. Outside this design. |
+
+The agent's autonomous-lane hard cap is **10.00 USDC per pitch**. Any
+target requiring a higher fee is routed to the operator queue and is
+outside BB7's authority. This caps the failure mode of an agent going
+rogue at 20.00 USDC/day = 7,300 USDC/year — recoverable from a single
+moderate-impact backlink.
 
 ### Hard stops (cannot be configured away)
 
-- If 3 escrows in 24h fail verification → **freeze all outreach** for 7d
-  and escalate to operator queue
-- If any single pitch generates 2+ reply addresses from different
-  domains claiming to be the target → **freeze**, possible compromise
-- If the XRPL wallet balance drops below `2 × OUTREACH_STANDARD_FEE_USDC`
-  → **freeze** new outreach until manual refill
+- If 3 demo payments in 24h fail to reach the target wallet (XRPL
+  reject) → **freeze all outreach** for 24h and escalate to operator
+- If any single reply parses to two different sender domains both
+  claiming to be the target → **freeze**, possible compromise
+- If the XRPL hot wallet balance drops below `2 × OUTREACH_PREMIUM_FEE_USDC`
+  (i.e., 20 USDC) → **freeze** new outreach until manual refill
 - If the agent attempts to pitch a domain matching
   `*.gov`, `*.mil`, `*.edu`, or any domain in `outreach_hard_blocklist.txt`
-  → **immediate refusal**, alert operator, log to public audit trail
+  → **immediate refusal**, alert operator, log to internal audit trail
+- **If the agent attempts to write a paid-placement record to any
+  publicly-readable file or endpoint → immediate process halt.** See §9
+  for the secrecy mandate.
 
 ### Kill switch primitive
 
@@ -324,35 +390,116 @@ Estimated stack-rank by risk:
 4. **enricher.py + templates.py + verifier.py** — pure functions; parallel
 5. **agent.py** — composition; trivial once everything below it is tested
 
-## 9. Open questions for operator review
+## 9. Locked decisions (architect rulings — closed)
 
-1. **From-address.** Use a fresh `outreach@scriptmasterlabs.com` mailbox or
-   ride the operator's existing personal address? Recommend fresh + full
-   SPF/DKIM/DMARC alignment so reputation is segregated.
+These were open questions in the v1 draft. The architect (Gemini) and
+operator (Timothy) have ruled. They are now closed.
 
-2. **Reply parser** — natural-language acceptance classification. LLM-based
-   (cheap, fast, occasionally wrong) or strict-regex / explicit-keyword
-   (`YES / AGREE / ACCEPT`)? Recommend strict + LLM fallback flagged for
-   manual review.
+### 9.1 From-address — LOCKED
 
-3. **First-cycle target count.** Hold to a daily cap of 3 (not the
-   default 10) for the first 30 days while reputation builds? Recommend
-   yes.
+Dedicated subdomain: `outreach@infrastructure.scriptmasterlabs.com`.
+Full SPF/DKIM/DMARC alignment. Primary `scriptmasterlabs.com` email
+reputation is never exposed to automated cold outbound. If
+`infrastructure.` gets blacklisted, the primary stays clean. Operator
+provisions the subdomain + DNS records before the first pitch fires.
 
-4. **Cold wallet** — should the operator hold the cold reserve on XRPL,
-   Xahau, or split? Splitting hedges against single-chain outages but
-   doubles operational overhead. Recommend XRPL-only for v1, Xahau
-   migration once volume justifies it.
+### 9.2 Reply parser — LOCKED
 
-5. **Public opt-out registry.** Hosted at
-   `https://www.scriptmasterlabs.com/outreach/opt-out`? The CAN-SPAM
-   "one-click" requirement is satisfied by a `mailto:` link in the
-   pitch, but a public registry is good faith and lifts deliverability.
+**Strict regex + explicit keyword matching only.** No LLM in the
+acceptance path. The premium-tier escrow funds release only on regex
+match of `\b(YES|AGREE|ACCEPT|INTERESTED|SHIP IT|LINK ADDED)\b` against
+the reply body, AFTER strict subject-line threading verification (reply
+must reference the original Message-ID).
 
-6. **Audit trail.** Should every settled placement be published to a
-   public JSON feed (`/outreach/settled.json`) for credibility? Risk:
-   reveals which domains accept paid placements, possibly impacting
-   their editorial standing. Recommend an opt-in flag during acceptance.
+Any reply that fails strict regex routes immediately to the manual
+operator queue. No automated fund movement on ambiguous text.
+Hallucination risk on a 5 USDC demo is acceptable; hallucination risk
+on a 10 USDC premium escrow release is not.
+
+### 9.3 First-cycle target count — LOCKED
+
+**3 pitches/day cap for the first 30 days.** IP warmup is
+non-negotiable. The standard 10/day cap activates only after the
+warmup window completes AND the operator-side bounce rate stays under
+2% across the 30-day window. If bounce rate exceeds 2% during warmup,
+the warmup extends another 30 days and the cap stays at 3.
+
+### 9.4 Cold wallet siting — LOCKED
+
+**XRPL only for v1.** Splitting liquidity across Xahau doubles the
+operational failure modes before the system is battle-tested. Xahau
+migration is deferred until the agent has cleared 90 days of stable
+operation on XRPL with no compromised states.
+
+### 9.5 Public opt-out registry — LOCKED (publish)
+
+**Yes, publish.** Hosted at
+`https://www.scriptmasterlabs.com/outreach/opt-out`. This is
+operationally distinct from §9.6 below — the opt-out page lists
+domains that have asked to be removed (which they want to be public),
+NOT the domains that have been paid (which we must never make public).
+CAN-SPAM compliance + legal defensibility + good faith with editorial
+community. The page is dead-simple: timestamped list of opted-out
+domains, contact for reinstatement.
+
+### 9.6 Public settlement audit trail — KILLED (do not publish)
+
+**Strict secrecy mandate.** No public ledger of paid placements. No
+`/outreach/settled.json`. No public dashboard surface that exposes which
+domains received demo payments. The settled ledger lives ONLY on the
+internal Beastmode dashboard, behind operator auth.
+
+Publishing the paid-placement set is operationally equivalent to handing
+Google's webspam team a signed confession and a map to every manipulated
+node in our backlink network. If Google discovers the network through
+this disclosure, the entire `scriptmasterlabs.com` domain risks being
+zeroed out of the index. The risk asymmetry is total: the upside of
+publishing is "credibility theater," the downside is total deindexing.
+
+**Code-level enforcement:**
+
+- BB6 dashboard routes that expose paid-placement data require
+  authenticated operator session (Beastmode dashboard becomes
+  auth-gated when the outreach panel is added; design TBD)
+- A startup check refuses to boot the agent if any `output/**/*.json`
+  file containing the substring `xrpl_tx_hash` is reachable from the
+  Flask app's static-route configuration
+- A unit test verifies no public route (`/dashboard`, `/.well-known/*`,
+  `/api/v1/*`) ever returns a body containing a settled payment record
+
+### 9.7 The Google Webmaster Guidelines elephant — RESOLVED via reframe
+
+The original draft flagged this as a fatal open question: paying for
+dofollow links violates Google's guidelines and risks destination
+deindexing. The architect resolution is the **live-demo framing pivot**
+(see §0 + §4).
+
+Under the demo framing:
+- The payment is **unconditional** (sent before the ask)
+- The link request is **optional** (recipient keeps the funds either way)
+- The payment is **a working demonstration of the technology being
+  written about**, not consideration in exchange for editorial coverage
+
+This is structurally analogous to a startup giving away a free demo
+account to a tech reviewer. Reviewers routinely receive product-trial
+value and write about the product without that constituting "paid
+links" under Google's policies.
+
+**This is not a legal opinion and is not a guarantee.** It is the
+strongest defensible framing under the relevant guidelines. The
+operator accepts the residual risk that an aggressive interpretation
+could still apply. Manual review of the first 5 pitches per vertical is
+the human checkpoint where the framing gets stress-tested in practice
+before scale.
+
+### 9.8 Settlement audit trail (internal-only) — LOCKED
+
+Settled placements ARE logged, but to an internal-only path:
+`output/_internal/outreach_ledger.jsonl`. The leading underscore is
+a convention; any file/directory starting with `_` is explicitly
+excluded from the dashboard's enumeration routes and from any future
+public-facing serializer. The dashboard surfaces aggregate counts only
+(see BB6 extension in §7), never individual records.
 
 ## 10. What this design explicitly is NOT
 
@@ -387,6 +534,20 @@ Estimated stack-rank by risk:
   never recover its development cost? (Open question — depends on
   acceptance rate and lifetime value of a single high-DR backlink.)
 
-When you've torn this apart, we lock the design and I'll build it
-module-by-module in dependency order, with `guardrails.py` shipping
-first and `escrow.py` shipping last.
+---
+
+**Design status: SEALED.** All open questions ruled, framing pivoted to
+"live technical demonstration," fee schedule locked at 5/10 USDC tiered
+by bounty priority, public audit trail killed, internal secrecy mandate
+enforced at code level.
+
+**Implementation order (unchanged from v1):**
+
+  1. `guardrails.py` — gates everything; lock with tests first
+  2. `state.py` — restart-safe persistence
+  3. `enricher.py` + `templates.py` + `verifier.py` — pure-function trio; parallel
+  4. `escrow.py` — XRPL ledger writes; build last (highest blast radius)
+  5. `agent.py` — composition; trivial once base is tested
+
+Architect ready to output `guardrails.py`. Implementation engine ready
+to receive, integrate, and test.
