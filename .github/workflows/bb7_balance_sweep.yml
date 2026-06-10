@@ -37,6 +37,9 @@ jobs:
         # Exit 1 (low balance) is informational, not a failure. Only exit
         # code 2 (config/seed error) should turn the workflow red.
         run: |
+          set +e
           python -m sml_beast.outreach.opctl balance
           ec=$?
+          set -e
           if [ "$ec" -ge 2 ]; then exit "$ec"; fi
+          exit 0
