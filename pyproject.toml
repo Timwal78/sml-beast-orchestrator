@@ -31,7 +31,7 @@ dependencies = [
 bb7 = [
   "xrpl-py>=2.5,<5.0",
   "beautifulsoup4>=4.12,<5.0",
-  "lxml>=5.0,<6.0",
+  "lxml>=5.0,<7.0",
   "dnspython>=2.0.0",
 ]
 # Dev tooling — never installed in production.
