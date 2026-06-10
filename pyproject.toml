@@ -37,7 +37,7 @@ bb7 = [
 # Dev tooling — never installed in production.
 dev = [
   "ruff>=0.6,<1.0",
-  "mypy>=1.10,<2.0",
+  "mypy>=1.10,<3.0",
   "types-requests",
   "types-beautifulsoup4",
   "pip-audit>=2.7",
