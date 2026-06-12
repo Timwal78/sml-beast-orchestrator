@@ -158,7 +158,8 @@ def _imap_config() -> dict[str, Any]:
         raise ReplyMonitorError(
             "BB7_IMAP_USER and BB7_IMAP_PASS are required."
         )
-    port = int(os.environ.get("BB7_IMAP_PORT", DEFAULT_IMAP_PORT))
+    port_raw = os.environ.get("BB7_IMAP_PORT", "").strip()
+    port = int(port_raw) if port_raw else DEFAULT_IMAP_PORT
     mailbox = os.environ.get("BB7_IMAP_MAILBOX", DEFAULT_MAILBOX)
     return {
         "host": host,
