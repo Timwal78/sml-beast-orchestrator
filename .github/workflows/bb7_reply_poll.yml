@@ -1,0 +1,38 @@
+name: BB7 Reply Monitor Poll
+
+on:
+  schedule:
+    # Every 30 minutes during weekday business hours UTC (covers most timezones).
+    # Polling more often would batter the IMAP server; less often delays opt-outs.
+    - cron: "*/30 13-22 * * 1-5"
+  workflow_dispatch: {}
+
+concurrency:
+  group: bb7-reply-poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    name: Poll outreach inbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[bb7]"
+
+      - name: Poll inbox + classify replies
+        env:
+          BEAST_OUTPUT_ROOT: ${{ secrets.BEAST_OUTPUT_ROOT }}
+          BB7_IMAP_HOST: ${{ secrets.BB7_IMAP_HOST }}
+          BB7_IMAP_USER: ${{ secrets.BB7_IMAP_USER }}
+          BB7_IMAP_PASS: ${{ secrets.BB7_IMAP_PASS }}
+          BB7_IMAP_PORT: ${{ secrets.BB7_IMAP_PORT }}
+          BB7_IMAP_MAILBOX: ${{ secrets.BB7_IMAP_MAILBOX }}
+        run: python -m sml_beast.outreach.opctl poll

@@ -1,0 +1,53 @@
+# Single unified service: x402 proxy + dashboard + worker threads in one
+# process. The Procfile entrypoint (`python -m sml_beast.orchestrator`) starts
+# the Flask proxy on $PORT (where Render's health check hits) and spawns the
+# vertical worker threads in the same process. Workers talk to the proxy
+# over 127.0.0.1 — protocol stays clean, no extra hop.
+#
+# This is the standalone-weapon deployment. It is NOT part of squeezeos-api
+# and must never share a Render group with the SqueezeOS trading engine.
+services:
+  - type: web
+    name: sml-beast-orchestrator
+    runtime: python
+    plan: starter                # minimum that keeps the worker threads alive
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /health
+    # Install via pyproject.toml so deps stay single-sourced. The `bb7`
+    # extra pulls xrpl-py + beautifulsoup4 + lxml for the outreach agent
+    # — required once the BB7 modules land their callers.
+    buildCommand: pip install -e ".[bb7]"
+    startCommand: python -m sml_beast.orchestrator
+    envVars:
+      # Required — orchestrator aborts at startup without these
+      - key: SERPER_API_KEY
+        sync: false              # set in Render dashboard, do not commit
+      - key: X402_PROXY_SECRET
+        sync: false              # HMAC secret; must match what mints tokens
+      # Required for the operator dashboard. Without this, the dashboard
+      # routes are NOT registered (failure-closed). Generate with
+      # `openssl rand -hex 32` and set in the Render dashboard env panel.
+      - key: DASHBOARD_AUTH_TOKEN
+        sync: false
+      # Required once BB7 outreach ships. Until then, leaving this unset
+      # keeps the agent inert. The seed signs Payment txs; never commit it.
+      - key: BB7_XRPL_WALLET_SEED
+        sync: false
+      - key: BB7_XRPL_NETWORK
+        value: testnet            # flip to "mainnet" after operator sign-off
+      # Optional — sensible defaults already in code
+      - key: X402_SERP_PRICE_USDC
+        value: "0.001"
+      - key: X402_NETWORK
+        value: base-sepolia
+      - key: X402_PAY_TO
+        value: "0x4e14B249D9A4c9c9352D780eCEB508A8eB7a7700"
+      - key: BEAST_OUTPUT_ROOT
+        value: /opt/render/project/src/output
+      - key: LOG_LEVEL
+        value: INFO
+    disk:
+      name: sml-beast-data
+      mountPath: /opt/render/project/src/output
+      sizeGB: 1

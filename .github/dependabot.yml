@@ -1,0 +1,26 @@
+version: 2
+updates:
+
+  # Runtime + dev deps via pyproject.toml
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    labels: [dependencies, automerge-candidate]
+    commit-message:
+      prefix: deps
+      include: scope
+
+  # GitHub Actions versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: ci(deps)

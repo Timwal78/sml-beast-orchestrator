@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on rapid pushes — saves Actions minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only by default; specific jobs widen scope when needed.
+permissions:
+  contents: read
+
+jobs:
+
+  # ── lint + format check ─────────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: ruff check
+        run: ruff check sml_beast tests
+      - name: ruff format --check
+        run: ruff format --check sml_beast tests
+
+  # ── type check ──────────────────────────────────────────────────────────
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install with dev + bb7 extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,bb7]"
+      - name: mypy
+        # Invoked via `python -m mypy` so the installed type stubs
+        # (types-requests, etc.) resolve through the same sys.path as
+        # the rest of the env.
+        run: python -m mypy sml_beast
+
+  # ── unit tests (matrix across 3.11 + 3.12) ──────────────────────────────
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      # Test isolation — these dummy values satisfy the orchestrator's
+      # required-env guards without exposing anything real. The proxy
+      # never makes outbound calls in unit-test mode.
+      SERPER_API_KEY: ci-dummy-key
+      X402_PROXY_SECRET: ci-dummy-secret-not-used-in-real-deploys
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install runtime + bb7 extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[bb7]"
+      - name: Run test suite
+        run: python -m unittest discover -s tests -v
+
+  # ── preflight validator (offline-only checks) ───────────────────────────
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      # Minimal env to make the preflight validator runnable. Real values
+      # are never committed; --skip-network avoids any outbound traffic.
+      BB7_XRPL_WALLET_SEED: ${{ secrets.BB7_XRPL_SEED }}
+      BB7_SMTP_HOST: smtp.example.com
+      BB7_SMTP_USER: ci-dummy@example.com
+      BB7_SMTP_PASS: ci-dummy-pass
+      BB7_OPT_OUT_URL: https://www.scriptmasterlabs.com/outreach/opt-out
+      BB7_OPERATOR_ADDRESS: ScriptMasterLabs - see contact page
+      BB7_OPERATOR_SIGNATURE: CI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install runtime + bb7 extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[bb7]"
+      - name: Run preflight (skip network)
+        # Exit code 1 (warnings) is acceptable in CI — the manual review
+        # gate is expected to be ACTIVE since this is a fresh checkout
+        # with no prior state. Only exit code 2 (hard fails) breaks the build.
+        run: |
+          python -m sml_beast.outreach.preflight --skip-network --json
+          ec=$?
+          if [ "$ec" -ge 2 ]; then exit "$ec"; fi
+
+  # ── security audit ──────────────────────────────────────────────────────
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install with dev extras for pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,bb7]"
+      - name: pip-audit (advisory; do not fail build on findings)
+        # Findings surface as a job annotation; we don't block merges on
+        # transitive CVEs we can't immediately fix. Operator reviews
+        # weekly via Dependabot security alerts.
+        continue-on-error: true
+        run: pip-audit

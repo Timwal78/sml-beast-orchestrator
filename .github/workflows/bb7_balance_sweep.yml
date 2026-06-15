@@ -1,0 +1,45 @@
+name: BB7 Balance Sweep
+
+on:
+  schedule:
+    # Every 2h during weekdays — catches drain before the next cycle attempts.
+    # Cheap: one XRPL account_info call.
+    - cron: "0 */2 * * 1-5"
+  workflow_dispatch: {}
+
+concurrency:
+  group: bb7-balance-sweep
+  cancel-in-progress: true
+
+jobs:
+  balance:
+    name: Hot wallet balance check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[bb7]"
+
+      - name: Check balance and emit alert if low
+        env:
+          BEAST_OUTPUT_ROOT: ${{ secrets.BEAST_OUTPUT_ROOT }}
+          BB7_XRPL_WALLET_SEED: ${{ secrets.BB7_XRPL_WALLET_SEED }}
+          BB7_XRPL_NETWORK: ${{ secrets.BB7_XRPL_NETWORK }}
+          BB7_XRP_PRICE_USDC: ${{ secrets.BB7_XRP_PRICE_USDC }}
+          BB7_DISCORD_ALERT_WEBHOOK: ${{ secrets.BB7_DISCORD_ALERT_WEBHOOK }}
+        # Exit 1 (low balance) is informational, not a failure. Only exit
+        # code 2 (config/seed error) should turn the workflow red.
+        run: |
+          set +e
+          python -m sml_beast.outreach.opctl balance
+          ec=$?
+          set -e
+          if [ "$ec" -ge 2 ]; then exit "$ec"; fi
+          exit 0

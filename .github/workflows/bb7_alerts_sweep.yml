@@ -1,0 +1,34 @@
+name: BB7 Alerts Sweep
+
+on:
+  schedule:
+    # Every 15 minutes — catches kill switch transitions and review backlog
+    # growth between agent cycles. Cheap (no XRPL, no SMTP, no IMAP).
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: bb7-alerts-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: Run alert sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[bb7]"
+
+      - name: Sweep + emit any alerts
+        env:
+          BEAST_OUTPUT_ROOT: ${{ secrets.BEAST_OUTPUT_ROOT }}
+          BB7_DISCORD_ALERT_WEBHOOK: ${{ secrets.BB7_DISCORD_ALERT_WEBHOOK }}
+        run: python -m sml_beast.outreach.opctl alerts-sweep
