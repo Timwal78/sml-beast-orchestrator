@@ -10,6 +10,9 @@ MASTERSHEETS_SILOS = {
         "best google sheets alternative",
         "spreadsheet software no subscription",
         "one-time payment spreadsheet",
+        "googlesheets replacement",
+        "excel alternative no subscription",
+        "googlesheets without subscription"
     ],
     "sovereignty": [
         "private data spreadsheet",
