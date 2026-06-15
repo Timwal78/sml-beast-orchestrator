@@ -22,6 +22,7 @@ dependencies = [
   "flask>=3.0,<4.0",
   "requests>=2.31,<3.0",
   "gunicorn>=21.2,<27.0",
+  "tweepy>=4.14,<5.0",
 ]
 
 [project.optional-dependencies]

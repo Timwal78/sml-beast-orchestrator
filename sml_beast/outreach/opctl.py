@@ -18,6 +18,7 @@ Commands:
   replies                             — dump operator review queue (ACCEPT/MANUAL_REVIEW)
   poll                                — one-shot IMAP poll; classify + persist
   dry-run                             — run one full cycle with NO XRPL / NO SMTP
+  x-post <vertical>                   — broadcast an auto-generated post to X.com
 
 Every mutating command prints a confirmation line before exiting.
 None of these commands send a pitch. None submit XRPL. None send SMTP.
@@ -157,11 +158,21 @@ def cmd_kill(args: argparse.Namespace) -> int:
         return 1
 
 
-def cmd_metrics(args: argparse.Namespace) -> int:
-    from .verifier import load_metrics
+def cmd_poll(args: argparse.Namespace) -> int:
+    from sml_beast.outreach.reply_monitor import monitor_cycle
 
-    records = load_metrics()
-    print(json.dumps(records, indent=2))
+    _info("Running one-shot IMAP poll cycle...")
+    monitor_cycle()
+    _ok("Poll complete.")
+    return 0
+
+
+def cmd_x_post(args: argparse.Namespace) -> int:
+    from sml_beast.outreach.x_poster import generate_post
+
+    dry_run = getattr(args, "dry_run_flag", False)
+    _info(f"Generating X.com post for vertical: {args.vertical}{' (DRY RUN)' if dry_run else ''}")
+    generate_post(args.vertical, dry_run=dry_run)
     return 0
 
 
@@ -170,6 +181,14 @@ def cmd_metrics_stats(args: argparse.Namespace) -> int:
 
     stats = conversion_stats()
     print(json.dumps(stats, indent=2))
+    return 0
+
+
+def cmd_metrics(args: argparse.Namespace) -> int:
+    from .verifier import load_metrics
+
+    records = load_metrics()
+    print(json.dumps(records, indent=2))
     return 0
 
 
@@ -338,6 +357,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run one full agent cycle with XRPL+SMTP disabled (for testing)",
     )
     s.set_defaults(fn=cmd_dry_run)
+
+    s = sub.add_parser("x-post", help="broadcast an auto-generated post to X.com")
+    s.add_argument("vertical", choices=("mastersheets", "xdeo"), help="the vertical to post about")
+    s.add_argument("--dry-run", action="store_true", dest="dry_run_flag", help="simulate without posting")
+    s.set_defaults(fn=cmd_x_post)
 
     return p
 
