@@ -42,7 +42,7 @@ class _AgentBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="beast-agent-")
         os.environ["BEAST_OUTPUT_ROOT"] = self.tmp
-        os.environ["BB7_XRPL_WALLET_SEED"] = "${{ secrets.BB7_XRPL_SEED }}"
+        os.environ.setdefault("BB7_XRPL_WALLET_SEED", os.environ.get("BB7_XRPL_SEED", ""))
         os.environ["BB7_SMTP_HOST"] = "smtp.example.com"
         os.environ["BB7_SMTP_USER"] = "outreach@infra.sml.com"
         os.environ["BB7_SMTP_PASS"] = "s3cr3t"

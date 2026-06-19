@@ -31,7 +31,7 @@ class _OpctlBase(unittest.TestCase):
         os.environ["BEAST_OUTPUT_ROOT"] = self.tmp
         # Pre-set env so dry-run wiring doesn't trip on missing vars
         for k, v in {
-            "BB7_XRPL_WALLET_SEED": "${{ secrets.BB7_XRPL_SEED }}",
+            "BB7_XRPL_WALLET_SEED": os.environ.get("BB7_XRPL_SEED", ""),
             "BB7_SMTP_HOST": "smtp.example.com",
             "BB7_SMTP_USER": "ci@example.com",
             "BB7_SMTP_PASS": "x",
