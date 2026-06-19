@@ -18,6 +18,16 @@ XDEO_TEMPLATES = [
     "The traditional financial API model is broken. Zero KYC. Zero Subscriptions. Pure information. AI agents can natively pay for xDEO market data using the x402 protocol. Check out the Truth Layer today! @CoinbaseDev #MCP"
 ]
 
+# mcp-x402 Amazon Storefront — flagship product templates
+MCP_X402_TEMPLATES = [
+    "The Amazon storefront for AI agents is live. 43+ tools. Pay per call. No subscriptions. $USDC $RLUSD $XAH on XRPL/Base/Solana. Connect your agent now: https://mcp-x402.onrender.com #MCP #x402 #AIagents #agentic @scriptmasterlabs",
+    "Agents walk in, pick a tool, pay and leave. That's mcp-x402. One endpoint. 43+ ScriptMasterLabs tools. AP2-native. x402 micropayments. $RLUSD $USDC $XAH. SDVOSB built. https://mcp-x402.onrender.com #ModelContextProtocol #XRPL",
+    "Just dropped: @scriptmasterlabs/mcp-x402@2.0.0 on npm. Plug 43 institutional-grade tools into your AI agent in one line. SqueezeOS squeeze scanner. SEC EDGAR parser. Ghost Layer. XRPL rails. Pay with $RLUSD or $USDC. #agentic #x402 #MCP",
+    "HTTP 402 Payment Required — the future of AI agent commerce. mcp-x402 is one of the first production MCP servers fully wired to the x402 protocol. 43+ tools. $0.005-$0.10/call. 21 FREE. https://scriptmasterlabs.com/stack $XAH $XRP $RLUSD #AIagents",
+    "Service-Disabled Veteran-Owned. Institutionally built. Agent-native payments. ScriptMasterLabs mcp-x402 is open for business. Connect Claude, Cursor, Zed, or any MCP client to 43+ tools today. https://mcp-x402.onrender.com $USDC $SOL #SDVOSB #MCP"
+]
+
+
 def get_twitter_client():
     api_key = os.environ.get("X_API_KEY")
     api_secret = os.environ.get("X_API_SECRET")
@@ -36,14 +46,16 @@ def get_twitter_client():
     )
     return client
 
+
 def generate_post(vertical: str, dry_run: bool = False):
     if vertical == "mastersheets":
-        # Placeholder link, in a real scenario we'd pull from output/bounty_targets.json or similar
         link = "https://play.google.com/store/books/author?id=Timothy+Walton"
         template = random.choice(MASTERSHEETS_TEMPLATES)
         post_text = template.format(link=link)
     elif vertical == "xdeo":
         post_text = random.choice(XDEO_TEMPLATES)
+    elif vertical == "mcp-x402":
+        post_text = random.choice(MCP_X402_TEMPLATES)
     else:
         raise ValueError(f"Unknown vertical for X.com posting: {vertical}")
 

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 # A real-looking but disposable testnet seed (s-prefixed, base58)
-TEST_SEED = "${{ secrets.BB7_XRPL_SEED }}"
+TEST_SEED = os.environ.get("BB7_XRPL_SEED", "")
 
 
 def _ok_response(

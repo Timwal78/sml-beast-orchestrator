@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-_VALID_SEED = "${{ secrets.BB7_XRPL_SEED }}"
+_VALID_SEED = os.environ.get("BB7_XRPL_SEED", "")
 
 
 def _ok_post():

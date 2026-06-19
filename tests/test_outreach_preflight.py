@@ -20,7 +20,7 @@ import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
-_VALID_SEED = "${{ secrets.BB7_XRPL_SEED }}"
+_VALID_SEED = os.environ.get("BB7_XRPL_SEED", "")
 
 
 def _env(**vars):
