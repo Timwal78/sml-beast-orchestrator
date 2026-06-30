@@ -1,0 +1,11 @@
+{
+  "schema_version": "2024-11-05",
+  "name": "sml-beast-orchestrator",
+  "description": "BEAST orchestrator — high-throughput multi-agent coordination. Part of the ScriptMasterLabs sovereign AI ecosystem.",
+  "provider": {"organization": "ScriptMasterLabs", "url": "https://www.scriptmasterlabs.com"},
+  "payment_protocol": "x402",
+  "payment_assets": ["RLUSD/XRPL", "USDC/Base"],
+  "agent_quickstart": "https://www.scriptmasterlabs.com/agent-start.html",
+  "llms_txt": "https://www.scriptmasterlabs.com/llms.txt",
+  "openapi_spec": "https://www.scriptmasterlabs.com/.well-known/openapi.json"
+}
